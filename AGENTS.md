@@ -211,6 +211,15 @@ kubectl kustomize manifests/overlays/k3d
   # Install dependencies (mirroring Dockerfile production layer)
   poetry install --no-interaction --no-ansi --only main --no-root
 
+## Local Cluster & Tools
+> **REQUIRED:** Tasks involving Kubernetes resources require a local cluster.
+
+- **Tools:** `kubectl` and `k3d` must be installed and available in the PATH.
+- **Environment Initialization:** Before running tasks, you MUST ensure the local environment is ready. 
+- **Setup Script:** There is a dedicated script `./scripts/k3d-cluster.sh`. You can trigger this via the make target:
+  ```bash
+  make k3d-create
+
 ## TODO
 
 - [ ] Add integration tests using testcontainers with microk8s or kind (decision TBD)

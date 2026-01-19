@@ -116,6 +116,9 @@ kubectl get crd mcptools.mcp.k8s.turd.ninja -o jsonpath='{.spec.versions[0].subr
 kubectl annotate mcptool echo-tool -n mcp-test test=$(date +%s) --overwrite
 kubectl get mcptool echo-tool -n mcp-test -o jsonpath='{.status}'
 # Should show status fields like ready, conditions, etc.
+
+**Agent Hint:**
+After updating the YAML, Jules should check if the Makefile has a make apply-crds or similar target to update the cluster before running the kubectl verification.
 ```
 
 ---
