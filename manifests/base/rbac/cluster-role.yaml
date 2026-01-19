@@ -1,0 +1,55 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mcp-operator
+  labels:
+    app.kubernetes.io/name: mcp-operator
+    app.kubernetes.io/component: operator
+rules:
+  # MCP custom resources
+  - apiGroups: ["mcp.example.com"]
+    resources:
+      - mcpservers
+      - mcptools
+      - mcpprompts
+      - mcpresources
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["mcp.example.com"]
+    resources:
+      - mcpservers/status
+      - mcptools/status
+      - mcpprompts/status
+      - mcpresources/status
+    verbs: ["get", "update", "patch"]
+
+  # Core resources for managing deployments
+  - apiGroups: [""]
+    resources:
+      - configmaps
+      - secrets
+      - services
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Apps resources
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Networking resources
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Events for status reporting
+  - apiGroups: [""]
+    resources:
+      - events
+    verbs: ["create", "patch"]
+
+  # Kopf requires these for its internal state
+  - apiGroups: [""]
+    resources:
+      - namespaces
+    verbs: ["get", "list", "watch"]

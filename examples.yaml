@@ -1,0 +1,373 @@
+# MCP Operator Project
+
+Kubernetes operator for managing MCP (Model Context Protocol) servers, tools, prompts, and resources.
+
+## Development Standards
+
+### Code Quality
+- **Linting**: All Python code must pass `ruff` linting
+  ```bash
+  ruff check .
+  ruff format .
+  ```
+- **Testing**: Minimum 80% unit test coverage with `pytest`
+  ```bash
+  pytest --cov=src --cov-report=term-missing --cov-fail-under=80
+  ```
+- **Type Hints**: All functions must have type annotations
+- **Docstrings**: All public functions/classes require docstrings
+
+### Project Structure
+```
+mcp-operator/
+├── src/
+│   ├── controllers/
+│   │   ├── mcpserver_controller.py
+│   │   ├── mcptool_controller.py
+│   │   ├── mcpprompt_controller.py
+│   │   └── mcpresource_controller.py
+│   ├── models/
+│   │   └── crds.py
+│   ├── utils/
+│   │   ├── k8s_client.py
+│   │   └── redis_client.py
+│   └── main.py
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── e2e/
+├── manifests/
+│   ├── crds/
+│   └── rbac/
+├── pyproject.toml
+└── README.md
+```
+
+### Development Setup
+```bash
+# Install dependencies
+pip install -e ".[dev]"
+
+# Run linting
+ruff check . --fix
+ruff format .
+
+# Run tests with coverage
+pytest --cov=src --cov-report=html --cov-fail-under=80
+
+# Run in dev mode with hot reload
+kopf run --standalone src/main.py
+```
+
+## Example Usage
+
+This example shows a complete setup with GitHub and CircleCI integrations.
+
+## Development Requirements
+
+### Code Quality
+- **Linting**: Ruff for fast Python linting and formatting
+- **Testing**: pytest with minimum 80% code coverage
+- **Type Hints**: Required for all public functions and methods
+
+### Setup Development Environment
+```bash
+# Install dependencies
+pip install -r requirements-dev.txt
+
+# Run linting
+ruff check .
+ruff format --check .
+
+# Run tests with coverage
+pytest --cov=src --cov-report=html --cov-report=term --cov-fail-under=80
+
+# Auto-fix linting issues
+ruff check --fix .
+ruff format .
+```
+
+### Pre-commit Hook (Recommended)
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: pytest-coverage
+        name: pytest-coverage
+        entry: pytest --cov=src --cov-fail-under=80
+        language: system
+        pass_filenames: false
+        always_run: true
+```
+
+## 1. Deploy the MCP Server
+
+```yaml
+apiVersion: mcp.example.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: main
+  namespace: mcp-system
+spec:
+  replicas: 3
+  redis:
+    serviceName: mcp-redis
+  ingress:
+    host: mcp.example.com
+    tlsSecretName: mcp-tls
+    pathPrefix: /mcp
+  toolSelector:
+    matchLabels:
+      mcp-server: main
+  config:
+    requestTimeout: 30s
+    maxConcurrentRequests: 100
+```
+
+## 2. GitHub Integration
+
+### GitHub Search Tool
+```yaml
+apiVersion: mcp.example.com/v1alpha1
+kind: MCPTool
+metadata:
+  name: github-search
+  namespace: mcp-system
+  labels:
+    mcp-server: main
+    app: github-integration
+spec:
+  name: github-search
+  description: Search GitHub repositories
+  service:
+    name: github-tool-svc
+    port: 8080
+    path: /search
+  inputSchema:
+    type: object
+    required:
+      - query
+    properties:
+      query:
+        type: string
+        description: Search query
+      language:
+        type: string
+        description: Programming language filter
+      stars:
+        type: integer
+        description: Minimum stars
+  method: POST
+  ingressPath: /tools/github/search
+```
+
+### GitHub Query Helper Prompt
+```yaml
+apiVersion: mcp.example.com/v1alpha1
+kind: MCPPrompt
+metadata:
+  name: github-query-helper
+  namespace: mcp-system
+  labels:
+    mcp-server: main
+    app: github-integration
+spec:
+  name: github-query-helper
+  description: Helper for constructing GitHub searches
+  template: |
+    Search GitHub for {{query}} repositories.
+    Filter by language: {{language}}
+    Minimum stars: {{min_stars}}
+  variables:
+    - name: query
+      description: What to search for
+      required: true
+    - name: language
+      description: Programming language
+      required: false
+      default: "any"
+    - name: min_stars
+      description: Minimum star count
+      required: false
+      default: "0"
+  ingressPath: /prompts/github/query
+```
+
+### GitHub Documentation Resource
+```yaml
+apiVersion: mcp.example.com/v1alpha1
+kind: MCPResource
+metadata:
+  name: github-docs
+  namespace: mcp-system
+  labels:
+    mcp-server: main
+    app: github-integration
+spec:
+  name: github-docs
+  description: GitHub API documentation
+  operations:
+    - method: GET
+      ingressPath: /resources/github/docs/{section}
+      service:
+        name: github-docs-svc
+        port: 8080
+        path: /api/docs/{section}
+      parameters:
+        - name: section
+          in: path
+          required: true
+          description: Documentation section to retrieve
+        - name: version
+          in: query
+          required: false
+          description: API version
+```
+
+## 3. CircleCI Integration
+
+### CircleCI Pipeline Trigger Tool
+```yaml
+apiVersion: mcp.example.com/v1alpha1
+kind: MCPTool
+metadata:
+  name: circleci-trigger
+  namespace: mcp-system
+  labels:
+    mcp-server: main
+    app: circleci-integration
+spec:
+  name: circleci-trigger
+  description: Trigger CircleCI pipeline
+  service:
+    name: circleci-tool-svc
+    port: 8080
+    path: /trigger
+  inputSchema:
+    type: object
+    required:
+      - project
+      - branch
+    properties:
+      project:
+        type: string
+      branch:
+        type: string
+      parameters:
+        type: object
+  method: POST
+  ingressPath: /tools/circleci/trigger
+```
+
+### CircleCI Config Resource (Inline Content)
+```yaml
+apiVersion: mcp.example.com/v1alpha1
+kind: MCPResource
+metadata:
+  name: circleci-config-template
+  namespace: mcp-system
+  labels:
+    mcp-server: main
+    app: circleci-integration
+spec:
+  name: circleci-config-template
+  description: Sample CircleCI configuration template
+  content:
+    uri: "config://circleci/template"
+    mimeType: "text/yaml"
+    text: |
+      version: 2.1
+      jobs:
+        build:
+          docker:
+            - image: cimg/base:stable
+          steps:
+            - checkout
+            - run: echo "Hello World"
+      workflows:
+        main:
+          jobs:
+            - build
+```
+
+## Expected Behavior
+
+1. **MCP Server** watches for Tools, Prompts, and Resources with label `mcp-server: main`
+2. **Operator** creates:
+   - Deployment for MCP server pods (3 replicas)
+   - Service for MCP server
+   - Ingress rules for all defined paths
+   - ConfigMaps with tool/prompt/resource configs
+3. **Redis** stores:
+   - Active sessions
+   - Tool discovery cache
+   - Rate limiting state
+4. **Ingress Routes**:
+   - `POST /mcp/tools/github/search` → GitHub search tool
+   - `POST /mcp/tools/circleci/trigger` → CircleCI trigger
+   - `GET /mcp/prompts/github/query` → GitHub query prompt
+   - `GET /mcp/resources/github/docs/{section}?version=v3` → GitHub docs
+   - `GET /mcp/resources/circleci/template` → CircleCI config (inline)
+
+## Verification
+
+```bash
+# Install CRDs
+kubectl apply -f mcpserver-crd.yaml
+kubectl apply -f mcptool-crd.yaml
+kubectl apply -f mcpprompt-crd.yaml
+kubectl apply -f mcpresource-crd.yaml
+
+# Deploy examples
+kubectl apply -f examples.yaml
+
+# Check status
+kubectl get mcpservers
+kubectl get mcptools -l app=github-integration
+kubectl get mcpprompts -l mcp-server=main
+kubectl get mcpresources
+
+# View MCP server status
+kubectl describe mcpserver main
+```
+
+## Testing Strategy
+
+### Unit Tests (80% minimum coverage)
+- **CRD Validation**: Test schema validation logic
+- **Reconciliation Logic**: Mock k8s client, verify resource creation
+- **Configuration Generation**: ConfigMap/Ingress generation from specs
+- **State Management**: Redis operations, tool registration
+- **HTTP Handlers**: MCP protocol implementation
+
+### Integration Tests
+- **envtest**: Test operator against fake k8s API (no cluster required)
+- **Controller Runtime**: Verify reconciliation loops, owner references
+- **Finalizers**: Test cleanup behavior
+
+### E2E Tests
+- **kind Cluster**: Full operator deployment
+- **MCP Client**: Real protocol communication
+- **Rolling Updates**: Verify zero-downtime deployments
+
+### Test Structure
+```
+tests/
+├── unit/
+│   ├── test_controllers.py
+│   ├── test_config_generation.py
+│   ├── test_validators.py
+│   └── test_mcp_server.py
+├── integration/
+│   ├── test_reconciliation.py
+│   └── test_operator_lifecycle.py
+└── e2e/
+    └── test_full_deployment.py
+```

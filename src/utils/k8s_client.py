@@ -1,0 +1,206 @@
+"""Kubernetes client utilities.
+
+Provides a wrapper around the kubernetes client for common operations
+used by the MCP operator controllers.
+"""
+
+from typing import Any
+
+from kubernetes import client, config
+from kubernetes.client.exceptions import ApiException
+
+
+class K8sClient:
+    """Kubernetes client wrapper for MCP operator operations."""
+
+    def __init__(self) -> None:
+        """Initialize the Kubernetes client.
+
+        Attempts to load in-cluster config first, falls back to kubeconfig.
+        """
+        try:
+            config.load_incluster_config()
+        except config.ConfigException:
+            config.load_kube_config()
+
+        self.core_v1 = client.CoreV1Api()
+        self.apps_v1 = client.AppsV1Api()
+        self.networking_v1 = client.NetworkingV1Api()
+        self.custom_objects = client.CustomObjectsApi()
+
+    def get_service(self, name: str, namespace: str) -> dict[str, Any] | None:
+        """Get a Service by name.
+
+        Args:
+            name: The service name.
+            namespace: The service namespace.
+
+        Returns:
+            The service object as a dict, or None if not found.
+        """
+        try:
+            svc = self.core_v1.read_namespaced_service(name, namespace)
+            return svc.to_dict()
+        except ApiException as e:
+            if e.status == 404:
+                return None
+            raise
+
+    def get_service_endpoint(self, name: str, namespace: str, port: int) -> str | None:
+        """Get the cluster-internal endpoint for a service.
+
+        Args:
+            name: The service name.
+            namespace: The service namespace.
+            port: The target port.
+
+        Returns:
+            The endpoint URL (e.g., "http://svc.ns.svc.cluster.local:8080"),
+            or None if service not found.
+        """
+        svc = self.get_service(name, namespace)
+        if svc is None:
+            return None
+        return f"http://{name}.{namespace}.svc.cluster.local:{port}"
+
+    def get_deployment(self, name: str, namespace: str) -> dict[str, Any] | None:
+        """Get a Deployment by name.
+
+        Args:
+            name: The deployment name.
+            namespace: The deployment namespace.
+
+        Returns:
+            The deployment object as a dict, or None if not found.
+        """
+        try:
+            deployment = self.apps_v1.read_namespaced_deployment(name, namespace)
+            return deployment.to_dict()
+        except ApiException as e:
+            if e.status == 404:
+                return None
+            raise
+
+    def list_by_label_selector(
+        self,
+        group: str,
+        version: str,
+        plural: str,
+        namespace: str,
+        label_selector: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """List custom resources by label selector.
+
+        Args:
+            group: The API group (e.g., "mcp.example.com").
+            version: The API version (e.g., "v1alpha1").
+            plural: The resource plural name (e.g., "mcptools").
+            namespace: The namespace to search in.
+            label_selector: The label selector dict with matchLabels/matchExpressions.
+
+        Returns:
+            List of matching resources.
+        """
+        # Convert label selector to string format
+        selector_str = self._build_label_selector_string(label_selector)
+
+        try:
+            result = self.custom_objects.list_namespaced_custom_object(
+                group=group,
+                version=version,
+                namespace=namespace,
+                plural=plural,
+                label_selector=selector_str,
+            )
+            return result.get("items", [])
+        except ApiException:
+            return []
+
+    def _build_label_selector_string(self, selector: dict[str, Any]) -> str:
+        """Build a label selector string from a selector dict.
+
+        Args:
+            selector: Dict with matchLabels and/or matchExpressions.
+
+        Returns:
+            A comma-separated label selector string.
+        """
+        parts: list[str] = []
+
+        # Handle matchLabels
+        match_labels = selector.get("matchLabels", {})
+        for key, value in match_labels.items():
+            parts.append(f"{key}={value}")
+
+        # Handle matchExpressions
+        match_expressions = selector.get("matchExpressions", [])
+        for expr in match_expressions:
+            key = expr.get("key", "")
+            operator = expr.get("operator", "")
+            values = expr.get("values", [])
+
+            if operator == "In":
+                parts.append(f"{key} in ({','.join(values)})")
+            elif operator == "NotIn":
+                parts.append(f"{key} notin ({','.join(values)})")
+            elif operator == "Exists":
+                parts.append(key)
+            elif operator == "DoesNotExist":
+                parts.append(f"!{key}")
+
+        return ",".join(parts)
+
+    def create_or_update_configmap(
+        self,
+        name: str,
+        namespace: str,
+        data: dict[str, str],
+        owner_reference: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create or update a ConfigMap.
+
+        Args:
+            name: The ConfigMap name.
+            namespace: The ConfigMap namespace.
+            data: The ConfigMap data.
+            owner_reference: Optional owner reference for garbage collection.
+
+        Returns:
+            The created/updated ConfigMap.
+        """
+        metadata: dict[str, Any] = {"name": name, "namespace": namespace}
+        if owner_reference:
+            metadata["ownerReferences"] = [owner_reference]
+
+        body = client.V1ConfigMap(
+            api_version="v1",
+            kind="ConfigMap",
+            metadata=client.V1ObjectMeta(**metadata),
+            data=data,
+        )
+
+        try:
+            result = self.core_v1.replace_namespaced_config_map(name, namespace, body)
+        except ApiException as e:
+            if e.status == 404:
+                result = self.core_v1.create_namespaced_config_map(namespace, body)
+            else:
+                raise
+
+        return result.to_dict()
+
+
+# Module-level client instance (lazy initialization)
+_client: K8sClient | None = None
+
+
+def get_k8s_client() -> K8sClient:
+    """Get or create the singleton K8s client instance.
+
+    Returns:
+        The K8sClient instance.
+    """
+    global _client  # noqa: PLW0603
+    if _client is None:
+        _client = K8sClient()
+    return _client
