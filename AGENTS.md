@@ -190,6 +190,27 @@ kubectl kustomize manifests/overlays/k3d
 - **Simple Redis** - Single replica for dev; users bring their own HA Redis for production
 - **Helm later** - Can add chart and push to `ghcr.io/<repo>/charts` when needed
 
+## Environment Setup & Constraints
+> **IMPORTANT:** This project relies on a specific Conda environment. Follow these instructions strictly to avoid environment drift or conflicting dependencies.
+
+### Python Environment
+- **Environment Name:** `kube-mcp`
+- **Local Context:** Do NOT create a standard virtual environment (`venv`). You must use the existing **Conda** environment named `kube-mcp`.
+- **Dependency Management:** Use `poetry` to manage dependencies, configured to install directly into the active Conda environment.
+- **Setup Commands:** If dependencies need to be refreshed or the environment is being initialized, run:
+  ```bash
+  # Ensure the correct conda environment is active
+  conda activate kube-mcp
+
+  # Ensure poetry is present
+  pip install --no-cache-dir poetry
+
+  # Configure poetry to use the active conda environment
+  poetry config virtualenvs.create false
+
+  # Install dependencies (mirroring Dockerfile production layer)
+  poetry install --no-interaction --no-ansi --only main --no-root
+
 ## TODO
 
 - [ ] Add integration tests using testcontainers with microk8s or kind (decision TBD)
