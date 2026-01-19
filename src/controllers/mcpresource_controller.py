@@ -47,8 +47,8 @@ def _create_condition(
     }
 
 
-@kopf.on.create("mcp.example.com", "v1alpha1", "mcpresources")
-@kopf.on.update("mcp.example.com", "v1alpha1", "mcpresources")
+@kopf.on.create("mcp.k8s.turd.ninja", "v1alpha1", "mcpresources")
+@kopf.on.update("mcp.k8s.turd.ninja", "v1alpha1", "mcpresources")
 async def reconcile_mcpresource(
     spec: dict[str, Any],
     name: str,
@@ -181,7 +181,7 @@ async def reconcile_mcpresource(
     }
 
 
-@kopf.on.delete("mcp.example.com", "v1alpha1", "mcpresources")
+@kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpresources")
 async def delete_mcpresource(
     name: str,
     namespace: str,

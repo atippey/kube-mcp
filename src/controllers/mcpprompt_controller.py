@@ -57,8 +57,8 @@ def _extract_template_variables(template: str) -> set[str]:
     return set(re.findall(pattern, template))
 
 
-@kopf.on.create("mcp.example.com", "v1alpha1", "mcpprompts")
-@kopf.on.update("mcp.example.com", "v1alpha1", "mcpprompts")
+@kopf.on.create("mcp.k8s.turd.ninja", "v1alpha1", "mcpprompts")
+@kopf.on.update("mcp.k8s.turd.ninja", "v1alpha1", "mcpprompts")
 async def reconcile_mcpprompt(
     spec: dict[str, Any],
     name: str,
@@ -142,7 +142,7 @@ async def reconcile_mcpprompt(
     }
 
 
-@kopf.on.delete("mcp.example.com", "v1alpha1", "mcpprompts")
+@kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpprompts")
 async def delete_mcpprompt(
     name: str,
     namespace: str,

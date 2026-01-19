@@ -43,8 +43,8 @@ def _create_condition(
     }
 
 
-@kopf.on.create("mcp.example.com", "v1alpha1", "mcptools")
-@kopf.on.update("mcp.example.com", "v1alpha1", "mcptools")
+@kopf.on.create("mcp.k8s.turd.ninja", "v1alpha1", "mcptools")
+@kopf.on.update("mcp.k8s.turd.ninja", "v1alpha1", "mcptools")
 async def reconcile_mcptool(
     spec: dict[str, Any],
     name: str,
@@ -129,7 +129,7 @@ async def reconcile_mcptool(
     }
 
 
-@kopf.on.delete("mcp.example.com", "v1alpha1", "mcptools")
+@kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcptools")
 async def delete_mcptool(
     name: str,
     namespace: str,

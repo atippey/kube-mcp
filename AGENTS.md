@@ -62,10 +62,10 @@ mcp-operator/
 
 ## CRDs
 
-- **MCPServer** (`mcpservers.mcp.example.com`) - Deploys HA MCP server pods
-- **MCPTool** (`mcptools.mcp.example.com`) - Defines tools referencing K8s services
-- **MCPPrompt** (`mcpprompts.mcp.example.com`) - Defines prompt templates
-- **MCPResource** (`mcpresources.mcp.example.com`) - Defines resources (HTTP or inline)
+- **MCPServer** (`mcpservers.mcp.k8s.turd.ninja`) - Deploys HA MCP server pods
+- **MCPTool** (`mcptools.mcp.k8s.turd.ninja`) - Defines tools referencing K8s services
+- **MCPPrompt** (`mcpprompts.mcp.k8s.turd.ninja`) - Defines prompt templates
+- **MCPResource** (`mcpresources.mcp.k8s.turd.ninja`) - Defines resources (HTTP or inline)
 
 ## Architecture
 

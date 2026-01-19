@@ -51,7 +51,7 @@ make run
 
 ```yaml
 # Create an MCP server that selects tools with label "mcp-server: main"
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPServer
 metadata:
   name: main
@@ -65,7 +65,7 @@ spec:
       mcp-server: main
 ---
 # Register a tool
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPTool
 metadata:
   name: github-search
@@ -171,7 +171,7 @@ spec:
   redis:
     serviceName: mcp-redis       # Redis service for state
   ingress:
-    host: mcp.example.com        # Ingress hostname
+    host: mcp.k8s.turd.ninja        # Ingress hostname
     tlsSecretName: mcp-tls       # TLS secret
     pathPrefix: /mcp             # Base path
   toolSelector:
