@@ -2,6 +2,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Set PYTHONPATH so imports work correctly
+ENV PYTHONPATH=/app
+
 # Install poetry
 RUN pip install --no-cache-dir poetry
 
@@ -18,9 +21,6 @@ COPY src/ ./src/
 # Run as non-root user
 RUN useradd --create-home --uid 1000 --user-group appuser
 USER appuser
-
-# Set PYTHONPATH so imports work correctly
-ENV PYTHONPATH=/app
 
 # kopf operator entrypoint
 ENTRYPOINT ["kopf", "run", "--standalone", "--all-namespaces", "src/main.py"]
