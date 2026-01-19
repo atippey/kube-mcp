@@ -76,7 +76,7 @@ docker manifest inspect ghcr.io/atippey/mcp-operator:dev
 
 ## Task 3: Add status subresource to CRDs
 
-**Status:** Pending
+**Status:** Completed
 
 **Description:**
 The CRDs currently don't have the `status` subresource enabled, which prevents kopf from persisting status updates. Add the status subresource configuration to all four CRDs.
