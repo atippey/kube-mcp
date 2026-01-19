@@ -6,7 +6,7 @@ Rote development tasks to be completed by Jules to save Claude tokens.
 
 ## Task 1: Change CRD FQDN from example.com to k8s.turd.ninja
 
-**Status:** Pending
+**Status:** Completed
 
 **Description:**
 Replace all occurrences of `mcp.example.com` with `mcp.k8s.turd.ninja` across the codebase.
@@ -41,7 +41,7 @@ grep -r "mcp.k8s.turd.ninja" --include="*.yaml" --include="*.py"
 
 ## Task 2: Multi-architecture Docker builds (arm64 + amd64)
 
-**Status:** Pending
+**Status:** Completed
 
 **Description:**
 Update the Docker build process to produce multi-architecture images supporting both `linux/arm64` and `linux/amd64`. This is needed because `ghul` cluster runs Intel (amd64) while local dev uses Apple Silicon (arm64).
@@ -76,7 +76,7 @@ docker manifest inspect ghcr.io/atippey/mcp-operator:dev
 
 ## Task 3: Add status subresource to CRDs
 
-**Status:** Completed
+**Status:** Completed (was already done)
 
 **Description:**
 The CRDs currently don't have the `status` subresource enabled, which prevents kopf from persisting status updates. Add the status subresource configuration to all four CRDs.
@@ -116,14 +116,51 @@ kubectl get crd mcptools.mcp.k8s.turd.ninja -o jsonpath='{.spec.versions[0].subr
 kubectl annotate mcptool echo-tool -n mcp-test test=$(date +%s) --overwrite
 kubectl get mcptool echo-tool -n mcp-test -o jsonpath='{.status}'
 # Should show status fields like ready, conditions, etc.
+```
 
 **Agent Hint:**
 After updating the YAML, Jules should check if the Makefile has a make apply-crds or similar target to update the cluster before running the kubectl verification.
-```
 
 ---
 
-## Task 4: (Reserved for future tasks)
+## Task 4: Debug kopf status patching issue
+
+**Status:** Pending
+
+**Description:**
+The kopf operator is correctly reconciling resources but status updates are not persisting. The CRDs have `subresources.status: {}` configured, and RBAC allows patching `*/status` resources, but kopf logs show:
+
+```
+Patching failed with inconsistencies: (('remove', ('status', 'reconcile_mcptool'), {...}, None),)
+```
+
+**Investigation needed:**
+1. Research how kopf handles status subresources in Kubernetes
+2. Check if kopf requires special configuration to use the `/status` subresource endpoint
+3. Look at kopf documentation for `kopf.on.field` or status-specific handlers
+4. Check if the return value from handlers needs special structure for status updates
+
+**Current behavior:**
+- Controllers return dicts with `ready`, `conditions`, `lastSyncTime`, etc.
+- kopf logs show the correct status values
+- But `kubectl get mcptool -o jsonpath='{.status}'` returns empty
+
+**Relevant files:**
+- `src/controllers/mcptool_controller.py` - example controller returning status
+- `manifests/base/crds/mcptool-crd.yaml` - CRD with status subresource
+
+**Kopf docs to review:**
+- https://kopf.readthedocs.io/en/stable/results/
+- https://kopf.readthedocs.io/en/stable/walkthrough/updates/
+
+**Expected outcome:**
+Either:
+1. Fix the controllers to properly update status via kopf
+2. Or document why status persistence isn't working and propose a solution
+
+---
+
+## Task 5: (Reserved for future tasks)
 
 **Status:** Pending
 
