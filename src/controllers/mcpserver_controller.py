@@ -73,8 +73,9 @@ async def reconcile_mcpserver(
     name: str,
     namespace: str,
     logger: kopf.Logger,
+    patch: kopf.Patch,
     **_: object,
-) -> dict[str, Any]:
+) -> None:
     """Reconcile an MCPServer resource.
 
     Args:
@@ -82,10 +83,8 @@ async def reconcile_mcpserver(
         name: The MCPServer name.
         namespace: The MCPServer namespace.
         logger: The kopf logger.
+        patch: The kopf patch object.
         **_: Additional kwargs from kopf.
-
-    Returns:
-        Status update dict with readyReplicas, toolCount, etc.
     """
     logger.info(f"Reconciling MCPServer {namespace}/{name}")
 
@@ -163,13 +162,11 @@ async def reconcile_mcpserver(
             message="Deployment has no ready replicas",
         )
 
-    return {
-        "readyReplicas": ready_replicas,
-        "toolCount": tool_count,
-        "promptCount": prompt_count,
-        "resourceCount": resource_count,
-        "conditions": [condition],
-    }
+    patch.status["readyReplicas"] = ready_replicas
+    patch.status["toolCount"] = tool_count
+    patch.status["promptCount"] = prompt_count
+    patch.status["resourceCount"] = resource_count
+    patch.status["conditions"] = [condition]
 
 
 @kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")

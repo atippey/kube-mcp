@@ -121,16 +121,19 @@ class TestMCPServerReconciliation:
             [],
         ]  # tools, prompts, resources
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcpserver(
+            await reconcile_mcpserver(
                 spec=sample_mcpserver_spec,
                 name="test-server",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        assert result["toolCount"] == 2
+        assert mock_patch_obj.status["toolCount"] == 2
         mock_k8s.list_by_label_selector.assert_called()
 
     @pytest.mark.asyncio
@@ -146,18 +149,21 @@ class TestMCPServerReconciliation:
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [mock_tools, mock_prompts, mock_resources]
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcpserver(
+            await reconcile_mcpserver(
                 spec=sample_mcpserver_spec,
                 name="test-server",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        assert result["toolCount"] == 2
-        assert result["promptCount"] == 1
-        assert result["resourceCount"] == 1
+        assert mock_patch_obj.status["toolCount"] == 2
+        assert mock_patch_obj.status["promptCount"] == 1
+        assert mock_patch_obj.status["resourceCount"] == 1
 
     @pytest.mark.asyncio
     async def test_reconcile_sets_ready_replicas(
@@ -171,16 +177,19 @@ class TestMCPServerReconciliation:
         mock_k8s.get_deployment.return_value = {
             "status": {"readyReplicas": 2},
         }
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcpserver(
+            await reconcile_mcpserver(
                 spec=sample_mcpserver_spec,
                 name="test-server",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        assert result["readyReplicas"] == 2
+        assert mock_patch_obj.status["readyReplicas"] == 2
 
     @pytest.mark.asyncio
     async def test_reconcile_deployment_not_found_sets_zero_replicas(
@@ -192,16 +201,19 @@ class TestMCPServerReconciliation:
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[], [], []]
         mock_k8s.get_deployment.return_value = None
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcpserver(
+            await reconcile_mcpserver(
                 spec=sample_mcpserver_spec,
                 name="test-server",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        assert result["readyReplicas"] == 0
+        assert mock_patch_obj.status["readyReplicas"] == 0
 
     @pytest.mark.asyncio
     async def test_reconcile_sets_conditions(
@@ -213,17 +225,20 @@ class TestMCPServerReconciliation:
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[], [], []]
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 2}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcpserver(
+            await reconcile_mcpserver(
                 spec=sample_mcpserver_spec,
                 name="test-server",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        assert len(result["conditions"]) > 0
-        ready_condition = next((c for c in result["conditions"] if c["type"] == "Ready"), None)
+        assert len(mock_patch_obj.status["conditions"]) > 0
+        ready_condition = next((c for c in mock_patch_obj.status["conditions"] if c["type"] == "Ready"), None)
         assert ready_condition is not None
 
     @pytest.mark.asyncio
@@ -236,16 +251,19 @@ class TestMCPServerReconciliation:
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[], [], []]
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 2}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcpserver(
+            await reconcile_mcpserver(
                 spec=sample_mcpserver_spec,
                 name="test-server",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        ready_condition = next((c for c in result["conditions"] if c["type"] == "Ready"), None)
+        ready_condition = next((c for c in mock_patch_obj.status["conditions"] if c["type"] == "Ready"), None)
         assert ready_condition["status"] == "True"
         assert ready_condition["reason"] == "DeploymentReady"
 
@@ -259,16 +277,19 @@ class TestMCPServerReconciliation:
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[], [], []]
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 0}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcpserver(
+            await reconcile_mcpserver(
                 spec=sample_mcpserver_spec,
                 name="test-server",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        ready_condition = next((c for c in result["conditions"] if c["type"] == "Ready"), None)
+        ready_condition = next((c for c in mock_patch_obj.status["conditions"] if c["type"] == "Ready"), None)
         assert ready_condition["status"] == "False"
         assert ready_condition["reason"] == "DeploymentNotReady"
 
@@ -282,6 +303,8 @@ class TestMCPServerReconciliation:
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[], [], []]
         mock_k8s.get_deployment.return_value = None
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
             await reconcile_mcpserver(
@@ -289,6 +312,7 @@ class TestMCPServerReconciliation:
                 name="test-server",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
         mock_logger.info.assert_called()
@@ -303,6 +327,8 @@ class TestMCPServerReconciliation:
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[], [], []]
         mock_k8s.get_deployment.return_value = None
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
             await reconcile_mcpserver(
@@ -310,6 +336,7 @@ class TestMCPServerReconciliation:
                 name="test-server",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
         # Should be called 3 times: once for tools, prompts, resources
@@ -335,15 +362,18 @@ class TestMCPServerReconciliation:
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[], [], []]
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcpserver(
+            await reconcile_mcpserver(
                 spec=sample_mcpserver_spec,
                 name="test-server",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        assert result["toolCount"] == 0
-        assert result["promptCount"] == 0
-        assert result["resourceCount"] == 0
+        assert mock_patch_obj.status["toolCount"] == 0
+        assert mock_patch_obj.status["promptCount"] == 0
+        assert mock_patch_obj.status["resourceCount"] == 0

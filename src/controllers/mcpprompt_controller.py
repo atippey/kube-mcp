@@ -64,8 +64,9 @@ async def reconcile_mcpprompt(
     name: str,
     namespace: str,
     logger: kopf.Logger,
+    patch: kopf.Patch,
     **_: object,
-) -> dict[str, Any]:
+) -> None:
     """Reconcile an MCPPrompt resource.
 
     Args:
@@ -73,10 +74,8 @@ async def reconcile_mcpprompt(
         name: The MCPPrompt name.
         namespace: The MCPPrompt namespace.
         logger: The kopf logger.
+        patch: The kopf patch object.
         **_: Additional kwargs from kopf.
-
-    Returns:
-        Status update dict with validated, conditions.
     """
     logger.info(f"Reconciling MCPPrompt {namespace}/{name}")
 
@@ -95,51 +94,47 @@ async def reconcile_mcpprompt(
     undeclared_vars = template_vars - declared_vars
     if undeclared_vars:
         logger.warning(f"MCPPrompt {name} has undeclared template variables: {undeclared_vars}")
-        return {
-            "validated": False,
-            "lastValidationTime": now,
-            "conditions": [
-                _create_condition(
-                    condition_type="Validated",
-                    status="False",
-                    reason="UndeclaredVariables",
-                    message=f"Template uses undeclared variables: {', '.join(sorted(undeclared_vars))}",
-                )
-            ],
-        }
+        patch.status["validated"] = False
+        patch.status["lastValidationTime"] = now
+        patch.status["conditions"] = [
+            _create_condition(
+                condition_type="Validated",
+                status="False",
+                reason="UndeclaredVariables",
+                message=f"Template uses undeclared variables: {', '.join(sorted(undeclared_vars))}",
+            )
+        ]
+        return
 
     # Check for unused variables (declared but not in template)
     unused_vars = declared_vars - template_vars
     if unused_vars:
         logger.warning(f"MCPPrompt {name} has unused declared variables: {unused_vars}")
-        return {
-            "validated": False,
-            "lastValidationTime": now,
-            "conditions": [
-                _create_condition(
-                    condition_type="Validated",
-                    status="False",
-                    reason="UnusedVariables",
-                    message=f"Declared variables not used in template: {', '.join(sorted(unused_vars))}",
-                )
-            ],
-        }
+        patch.status["validated"] = False
+        patch.status["lastValidationTime"] = now
+        patch.status["conditions"] = [
+            _create_condition(
+                condition_type="Validated",
+                status="False",
+                reason="UnusedVariables",
+                message=f"Declared variables not used in template: {', '.join(sorted(unused_vars))}",
+            )
+        ]
+        return
 
     # Template is valid
     logger.info(f"MCPPrompt {name} validated successfully")
 
-    return {
-        "validated": True,
-        "lastValidationTime": now,
-        "conditions": [
-            _create_condition(
-                condition_type="Validated",
-                status="True",
-                reason="TemplateValid",
-                message="Template and variables validated successfully",
-            )
-        ],
-    }
+    patch.status["validated"] = True
+    patch.status["lastValidationTime"] = now
+    patch.status["conditions"] = [
+        _create_condition(
+            condition_type="Validated",
+            status="True",
+            reason="TemplateValid",
+            message="Template and variables validated successfully",
+        )
+    ]
 
 
 @kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpprompts")

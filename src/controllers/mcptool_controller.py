@@ -50,8 +50,9 @@ async def reconcile_mcptool(
     name: str,
     namespace: str,
     logger: kopf.Logger,
+    patch: kopf.Patch,
     **_: object,
-) -> dict[str, Any]:
+) -> None:
     """Reconcile an MCPTool resource.
 
     Args:
@@ -59,10 +60,8 @@ async def reconcile_mcptool(
         name: The MCPTool name.
         namespace: The MCPTool namespace.
         logger: The kopf logger.
+        patch: The kopf patch object.
         **_: Additional kwargs from kopf.
-
-    Returns:
-        Status update dict with ready, resolvedEndpoint, conditions.
     """
     logger.info(f"Reconciling MCPTool {namespace}/{name}")
 
@@ -83,19 +82,18 @@ async def reconcile_mcptool(
         logger.warning(
             f"Service {tool_spec.service.name} not found in namespace {service_namespace}"
         )
-        return {
-            "ready": False,
-            "resolvedEndpoint": None,
-            "lastSyncTime": now,
-            "conditions": [
-                _create_condition(
-                    condition_type="Ready",
-                    status="False",
-                    reason="ServiceNotFound",
-                    message=f"Service {tool_spec.service.name} not found in namespace {service_namespace}",
-                )
-            ],
-        }
+        patch.status["ready"] = False
+        patch.status["resolvedEndpoint"] = None
+        patch.status["lastSyncTime"] = now
+        patch.status["conditions"] = [
+            _create_condition(
+                condition_type="Ready",
+                status="False",
+                reason="ServiceNotFound",
+                message=f"Service {tool_spec.service.name} not found in namespace {service_namespace}",
+            )
+        ]
+        return
 
     # Service exists - resolve endpoint
     base_endpoint = k8s.get_service_endpoint(
@@ -114,19 +112,17 @@ async def reconcile_mcptool(
 
     logger.info(f"Resolved endpoint for MCPTool {name}: {resolved_endpoint}")
 
-    return {
-        "ready": True,
-        "resolvedEndpoint": resolved_endpoint,
-        "lastSyncTime": now,
-        "conditions": [
-            _create_condition(
-                condition_type="Ready",
-                status="True",
-                reason="ServiceResolved",
-                message=f"Service {tool_spec.service.name} resolved to {resolved_endpoint}",
-            )
-        ],
-    }
+    patch.status["ready"] = True
+    patch.status["resolvedEndpoint"] = resolved_endpoint
+    patch.status["lastSyncTime"] = now
+    patch.status["conditions"] = [
+        _create_condition(
+            condition_type="Ready",
+            status="True",
+            reason="ServiceResolved",
+            message=f"Service {tool_spec.service.name} resolved to {resolved_endpoint}",
+        )
+    ]
 
 
 @kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcptools")

@@ -83,17 +83,20 @@ class TestMCPToolReconciliation:
         mock_k8s.get_service_endpoint.return_value = (
             "http://github-tool-svc.default.svc.cluster.local:8080"
         )
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcptool_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcptool(
+            await reconcile_mcptool(
                 spec=sample_mcptool_spec,
                 name="github-search",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        assert result["ready"] is True
-        assert "github-tool-svc" in result["resolvedEndpoint"]
+        assert mock_patch_obj.status["ready"] is True
+        assert "github-tool-svc" in mock_patch_obj.status["resolvedEndpoint"]
         mock_k8s.get_service.assert_called_once()
 
     @pytest.mark.asyncio
@@ -105,22 +108,25 @@ class TestMCPToolReconciliation:
         """Test that reconciliation sets ready=False when service doesn't exist."""
         mock_k8s = MagicMock()
         mock_k8s.get_service.return_value = None
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcptool_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcptool(
+            await reconcile_mcptool(
                 spec=sample_mcptool_spec,
                 name="github-search",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        assert result["ready"] is False
-        assert result["resolvedEndpoint"] is None
+        assert mock_patch_obj.status["ready"] is False
+        assert mock_patch_obj.status["resolvedEndpoint"] is None
         # Should have a condition explaining the failure
-        assert len(result["conditions"]) > 0
-        assert result["conditions"][0]["type"] == "Ready"
-        assert result["conditions"][0]["status"] == "False"
-        assert "not found" in result["conditions"][0]["message"].lower()
+        assert len(mock_patch_obj.status["conditions"]) > 0
+        assert mock_patch_obj.status["conditions"][0]["type"] == "Ready"
+        assert mock_patch_obj.status["conditions"][0]["status"] == "False"
+        assert "not found" in mock_patch_obj.status["conditions"][0]["message"].lower()
 
     @pytest.mark.asyncio
     async def test_reconcile_resolves_endpoint_same_namespace(
@@ -134,18 +140,21 @@ class TestMCPToolReconciliation:
         mock_k8s.get_service_endpoint.return_value = (
             "http://github-tool-svc.mcp-system.svc.cluster.local:8080"
         )
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcptool_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcptool(
+            await reconcile_mcptool(
                 spec=sample_mcptool_spec,
                 name="github-search",
                 namespace="mcp-system",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
         # Service lookup should use MCPTool's namespace
         mock_k8s.get_service.assert_called_with("github-tool-svc", "mcp-system")
-        assert "mcp-system" in result["resolvedEndpoint"]
+        assert "mcp-system" in mock_patch_obj.status["resolvedEndpoint"]
 
     @pytest.mark.asyncio
     async def test_reconcile_resolves_endpoint_cross_namespace(
@@ -163,18 +172,21 @@ class TestMCPToolReconciliation:
         mock_k8s.get_service_endpoint.return_value = (
             "http://backend-svc.backend-ns.svc.cluster.local:9000"
         )
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcptool_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcptool(
+            await reconcile_mcptool(
                 spec=spec,
                 name="cross-ns-tool",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
         # Service lookup should use explicit namespace
         mock_k8s.get_service.assert_called_with("backend-svc", "backend-ns")
-        assert "backend-ns" in result["resolvedEndpoint"]
+        assert "backend-ns" in mock_patch_obj.status["resolvedEndpoint"]
 
     @pytest.mark.asyncio
     async def test_reconcile_includes_path_in_endpoint(
@@ -188,17 +200,20 @@ class TestMCPToolReconciliation:
         mock_k8s.get_service_endpoint.return_value = (
             "http://github-tool-svc.default.svc.cluster.local:8080"
         )
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcptool_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcptool(
+            await reconcile_mcptool(
                 spec=sample_mcptool_spec,
                 name="github-search",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
         # Endpoint should include the path from spec
-        assert result["resolvedEndpoint"].endswith("/search")
+        assert mock_patch_obj.status["resolvedEndpoint"].endswith("/search")
 
     @pytest.mark.asyncio
     async def test_reconcile_sets_last_sync_time(
@@ -212,18 +227,21 @@ class TestMCPToolReconciliation:
         mock_k8s.get_service_endpoint.return_value = (
             "http://github-tool-svc.default.svc.cluster.local:8080"
         )
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcptool_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcptool(
+            await reconcile_mcptool(
                 spec=sample_mcptool_spec,
                 name="github-search",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        assert result["lastSyncTime"] is not None
+        assert mock_patch_obj.status["lastSyncTime"] is not None
         # Should be a valid ISO format timestamp
-        datetime.fromisoformat(result["lastSyncTime"].replace("Z", "+00:00"))
+        datetime.fromisoformat(mock_patch_obj.status["lastSyncTime"].replace("Z", "+00:00"))
 
     @pytest.mark.asyncio
     async def test_reconcile_ready_condition_when_ready(
@@ -237,16 +255,19 @@ class TestMCPToolReconciliation:
         mock_k8s.get_service_endpoint.return_value = (
             "http://github-tool-svc.default.svc.cluster.local:8080"
         )
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcptool_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcptool(
+            await reconcile_mcptool(
                 spec=sample_mcptool_spec,
                 name="github-search",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        ready_condition = next((c for c in result["conditions"] if c["type"] == "Ready"), None)
+        ready_condition = next((c for c in mock_patch_obj.status["conditions"] if c["type"] == "Ready"), None)
         assert ready_condition is not None
         assert ready_condition["status"] == "True"
         assert ready_condition["reason"] == "ServiceResolved"
@@ -263,6 +284,8 @@ class TestMCPToolReconciliation:
         mock_k8s.get_service_endpoint.return_value = (
             "http://github-tool-svc.default.svc.cluster.local:8080"
         )
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcptool_controller.get_k8s_client", return_value=mock_k8s):
             await reconcile_mcptool(
@@ -270,6 +293,7 @@ class TestMCPToolReconciliation:
                 name="github-search",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
         mock_logger.info.assert_called()

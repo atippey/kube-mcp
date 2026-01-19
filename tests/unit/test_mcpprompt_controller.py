@@ -77,15 +77,18 @@ class TestMCPPromptReconciliation:
         mock_logger: MagicMock,
     ) -> None:
         """Test that reconciliation sets validated=True when template is valid."""
-        result = await reconcile_mcpprompt(
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+        await reconcile_mcpprompt(
             spec=sample_mcpprompt_spec,
             name="github-query-helper",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
-        assert result["validated"] is True
-        assert len(result["conditions"]) > 0
+        assert mock_patch_obj.status["validated"] is True
+        assert len(mock_patch_obj.status["conditions"]) > 0
 
     @pytest.mark.asyncio
     async def test_reconcile_undeclared_variable_sets_validated_false(
@@ -101,20 +104,23 @@ class TestMCPPromptReconciliation:
                 # order_id is NOT declared
             ],
         }
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
-        result = await reconcile_mcpprompt(
+        await reconcile_mcpprompt(
             spec=spec,
             name="bad-template",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
-        assert result["validated"] is False
+        assert mock_patch_obj.status["validated"] is False
         # Should have a condition explaining the failure
-        assert len(result["conditions"]) > 0
-        assert result["conditions"][0]["type"] == "Validated"
-        assert result["conditions"][0]["status"] == "False"
-        assert "order_id" in result["conditions"][0]["message"]
+        assert len(mock_patch_obj.status["conditions"]) > 0
+        assert mock_patch_obj.status["conditions"][0]["type"] == "Validated"
+        assert mock_patch_obj.status["conditions"][0]["status"] == "False"
+        assert "order_id" in mock_patch_obj.status["conditions"][0]["message"]
 
     @pytest.mark.asyncio
     async def test_reconcile_unused_variable_sets_validated_false(
@@ -130,18 +136,21 @@ class TestMCPPromptReconciliation:
                 {"name": "unused_var", "description": "This is never used"},
             ],
         }
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
-        result = await reconcile_mcpprompt(
+        await reconcile_mcpprompt(
             spec=spec,
             name="unused-var",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
-        assert result["validated"] is False
-        assert result["conditions"][0]["type"] == "Validated"
-        assert result["conditions"][0]["status"] == "False"
-        assert "unused_var" in result["conditions"][0]["message"]
+        assert mock_patch_obj.status["validated"] is False
+        assert mock_patch_obj.status["conditions"][0]["type"] == "Validated"
+        assert mock_patch_obj.status["conditions"][0]["status"] == "False"
+        assert "unused_var" in mock_patch_obj.status["conditions"][0]["message"]
 
     @pytest.mark.asyncio
     async def test_reconcile_valid_condition_when_valid(
@@ -150,15 +159,18 @@ class TestMCPPromptReconciliation:
         mock_logger: MagicMock,
     ) -> None:
         """Test that Validated condition is True when template is valid."""
-        result = await reconcile_mcpprompt(
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+        await reconcile_mcpprompt(
             spec=sample_mcpprompt_spec,
             name="github-query-helper",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
         validated_condition = next(
-            (c for c in result["conditions"] if c["type"] == "Validated"), None
+            (c for c in mock_patch_obj.status["conditions"] if c["type"] == "Validated"), None
         )
         assert validated_condition is not None
         assert validated_condition["status"] == "True"
@@ -171,16 +183,19 @@ class TestMCPPromptReconciliation:
         mock_logger: MagicMock,
     ) -> None:
         """Test that reconciliation sets lastValidationTime."""
-        result = await reconcile_mcpprompt(
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+        await reconcile_mcpprompt(
             spec=sample_mcpprompt_spec,
             name="github-query-helper",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
-        assert result["lastValidationTime"] is not None
+        assert mock_patch_obj.status["lastValidationTime"] is not None
         # Should be a valid ISO format timestamp
-        datetime.fromisoformat(result["lastValidationTime"].replace("Z", "+00:00"))
+        datetime.fromisoformat(mock_patch_obj.status["lastValidationTime"].replace("Z", "+00:00"))
 
     @pytest.mark.asyncio
     async def test_reconcile_logs_info(
@@ -189,11 +204,14 @@ class TestMCPPromptReconciliation:
         mock_logger: MagicMock,
     ) -> None:
         """Test that reconciliation logs appropriate info."""
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
         await reconcile_mcpprompt(
             spec=sample_mcpprompt_spec,
             name="github-query-helper",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
         mock_logger.info.assert_called()
@@ -213,15 +231,18 @@ class TestMCPPromptReconciliation:
                 {"name": "city", "description": "City"},
             ],
         }
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
-        result = await reconcile_mcpprompt(
+        await reconcile_mcpprompt(
             spec=spec,
             name="multi-var",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
-        assert result["validated"] is True
+        assert mock_patch_obj.status["validated"] is True
 
     @pytest.mark.asyncio
     async def test_reconcile_no_variables_in_template(
@@ -234,15 +255,18 @@ class TestMCPPromptReconciliation:
             "template": "A simple prompt with no variables.",
             "variables": [],
         }
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
-        result = await reconcile_mcpprompt(
+        await reconcile_mcpprompt(
             spec=spec,
             name="no-vars",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
-        assert result["validated"] is True
+        assert mock_patch_obj.status["validated"] is True
 
     @pytest.mark.asyncio
     async def test_reconcile_multiple_occurrences_same_variable(
@@ -257,12 +281,15 @@ class TestMCPPromptReconciliation:
                 {"name": "name", "description": "User name"},
             ],
         }
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
-        result = await reconcile_mcpprompt(
+        await reconcile_mcpprompt(
             spec=spec,
             name="repeat-var",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
-        assert result["validated"] is True
+        assert mock_patch_obj.status["validated"] is True
