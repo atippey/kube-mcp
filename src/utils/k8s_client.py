@@ -213,7 +213,72 @@ class K8sClient:
             else:
                 raise
 
-        return result.to_dict()
+        return result.to_dict()  # type: ignore[no-any-return]
+
+    def create_or_update_service(
+        self,
+        name: str,
+        namespace: str,
+        ports: list[dict[str, Any]],
+        selector: dict[str, str],
+        owner_reference: dict[str, Any] | None = None,
+        type: str = "ClusterIP",
+    ) -> dict[str, Any]:
+        """Create or update a Service.
+
+        Args:
+            name: The Service name.
+            namespace: The Service namespace.
+            ports: List of port configs (port, targetPort, protocol, name).
+            selector: Label selector for pods.
+            owner_reference: Optional owner reference for garbage collection.
+            type: Service type (default: ClusterIP).
+
+        Returns:
+            The created/updated Service.
+        """
+        metadata: dict[str, Any] = {"name": name, "namespace": namespace}
+        if owner_reference:
+            metadata["ownerReferences"] = [owner_reference]
+
+        # Ensure ports are valid V1ServicePort objects
+        service_ports = []
+        for port in ports:
+            service_ports.append(
+                client.V1ServicePort(
+                    name=port.get("name"),
+                    port=port["port"],
+                    target_port=port.get("targetPort", port["port"]),
+                    protocol=port.get("protocol", "TCP"),
+                )
+            )
+
+        body = client.V1Service(
+            api_version="v1",
+            kind="Service",
+            metadata=client.V1ObjectMeta(**metadata),
+            spec=client.V1ServiceSpec(
+                ports=service_ports,
+                selector=selector,
+                type=type,
+            ),
+        )
+
+        try:
+            # Try to get existing service first to preserve cluster IP
+            existing = self.core_v1.read_namespaced_service(name, namespace)
+            body.metadata.resource_version = existing.metadata.resource_version
+            if type == "ClusterIP":
+                body.spec.cluster_ip = existing.spec.cluster_ip
+
+            result = self.core_v1.replace_namespaced_service(name, namespace, body)
+        except ApiException as e:
+            if e.status == 404:
+                result = self.core_v1.create_namespaced_service(namespace, body)
+            else:
+                raise
+
+        return result.to_dict()  # type: ignore[no-any-return]
 
 
 # Module-level client instance (lazy initialization)

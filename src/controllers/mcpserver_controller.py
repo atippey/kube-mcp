@@ -74,6 +74,7 @@ async def reconcile_mcpserver(
     namespace: str,
     logger: kopf.Logger,
     patch: kopf.Patch,
+    body: dict[str, Any],
     **_: object,
 ) -> None:
     """Reconcile an MCPServer resource.
@@ -84,6 +85,7 @@ async def reconcile_mcpserver(
         namespace: The MCPServer namespace.
         logger: The kopf logger.
         patch: The kopf patch object.
+        body: The full resource body.
         **_: Additional kwargs from kopf.
     """
     logger.info(f"Reconciling MCPServer {namespace}/{name}")
@@ -182,6 +184,28 @@ async def reconcile_mcpserver(
 
     # Create or update deployment
     k8s.create_or_update_deployment(deployment_name, namespace, deployment_body)
+
+    # Create Service
+    service_name = f"mcp-server-{name}"
+    owner_reference = {
+        "apiVersion": "mcp.k8s.turd.ninja/v1alpha1",
+        "kind": "MCPServer",
+        "name": name,
+        "uid": body["metadata"]["uid"],
+        "controller": True,
+        "blockOwnerDeletion": True,
+    }
+
+    k8s.create_or_update_service(
+        name=service_name,
+        namespace=namespace,
+        ports=[{"name": "http", "port": 8080, "targetPort": 8080, "protocol": "TCP"}],
+        selector={
+            "app.kubernetes.io/name": "mcp-server",
+            "app.kubernetes.io/instance": name,
+        },
+        owner_reference=owner_reference,
+    )
 
     # Check deployment status
     deployment = k8s.get_deployment(deployment_name, namespace)

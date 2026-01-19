@@ -112,12 +112,24 @@ class TestMCPServerReconciliation:
         with patch("src.controllers.mcpserver_controller.kopf.adopt") as mock:
             yield mock
 
+    @pytest.fixture
+    def sample_body(self) -> dict[str, Any]:
+        """Create a sample resource body."""
+        return {
+            "metadata": {
+                "name": "test-server",
+                "namespace": "default",
+                "uid": "test-uid-123",
+            }
+        }
+
     @pytest.mark.asyncio
     async def test_reconcile_finds_tools_by_selector(
         self,
         sample_mcpserver_spec: dict[str, Any],
         mock_logger: MagicMock,
         mock_tools: list[dict[str, Any]],
+        sample_body: dict[str, Any],
     ) -> None:
         """Test that reconciliation finds tools matching label selector."""
         mock_k8s = MagicMock()
@@ -137,6 +149,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+                body=sample_body,
             )
 
         assert mock_patch_obj.status["toolCount"] == 2
@@ -150,6 +163,7 @@ class TestMCPServerReconciliation:
         mock_tools: list[dict[str, Any]],
         mock_prompts: list[dict[str, Any]],
         mock_resources: list[dict[str, Any]],
+        sample_body: dict[str, Any],
     ) -> None:
         """Test that reconciliation counts prompts and resources."""
         mock_k8s = MagicMock()
@@ -165,6 +179,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+                body=sample_body,
             )
 
         assert mock_patch_obj.status["toolCount"] == 2
@@ -176,6 +191,7 @@ class TestMCPServerReconciliation:
         self,
         sample_mcpserver_spec: dict[str, Any],
         mock_logger: MagicMock,
+        sample_body: dict[str, Any],
     ) -> None:
         """Test that reconciliation sets readyReplicas based on deployment."""
         mock_k8s = MagicMock()
@@ -193,6 +209,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+                body=sample_body,
             )
 
         assert mock_patch_obj.status["readyReplicas"] == 2
@@ -202,6 +219,7 @@ class TestMCPServerReconciliation:
         self,
         sample_mcpserver_spec: dict[str, Any],
         mock_logger: MagicMock,
+        sample_body: dict[str, Any],
     ) -> None:
         """Test that reconciliation sets readyReplicas to 0 when deployment not found."""
         mock_k8s = MagicMock()
@@ -217,6 +235,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+                body=sample_body,
             )
 
         assert mock_patch_obj.status["readyReplicas"] == 0
@@ -226,6 +245,7 @@ class TestMCPServerReconciliation:
         self,
         sample_mcpserver_spec: dict[str, Any],
         mock_logger: MagicMock,
+        sample_body: dict[str, Any],
     ) -> None:
         """Test that reconciliation sets conditions."""
         mock_k8s = MagicMock()
@@ -241,6 +261,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+                body=sample_body,
             )
 
         assert len(mock_patch_obj.status["conditions"]) > 0
@@ -254,6 +275,7 @@ class TestMCPServerReconciliation:
         self,
         sample_mcpserver_spec: dict[str, Any],
         mock_logger: MagicMock,
+        sample_body: dict[str, Any],
     ) -> None:
         """Test that Ready condition is True when deployment is ready."""
         mock_k8s = MagicMock()
@@ -269,6 +291,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+                body=sample_body,
             )
 
         ready_condition = next(
@@ -282,6 +305,7 @@ class TestMCPServerReconciliation:
         self,
         sample_mcpserver_spec: dict[str, Any],
         mock_logger: MagicMock,
+        sample_body: dict[str, Any],
     ) -> None:
         """Test that Ready condition is False when deployment not ready."""
         mock_k8s = MagicMock()
@@ -297,6 +321,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+                body=sample_body,
             )
 
         ready_condition = next(
@@ -310,6 +335,7 @@ class TestMCPServerReconciliation:
         self,
         sample_mcpserver_spec: dict[str, Any],
         mock_logger: MagicMock,
+        sample_body: dict[str, Any],
     ) -> None:
         """Test that reconciliation logs appropriate info."""
         mock_k8s = MagicMock()
@@ -325,6 +351,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+                body=sample_body,
             )
 
         mock_logger.info.assert_called()
@@ -334,6 +361,7 @@ class TestMCPServerReconciliation:
         self,
         sample_mcpserver_spec: dict[str, Any],
         mock_logger: MagicMock,
+        sample_body: dict[str, Any],
     ) -> None:
         """Test that tool selector is used to find tools, prompts, and resources."""
         mock_k8s = MagicMock()
@@ -349,6 +377,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+                body=sample_body,
             )
 
         # Should be called 3 times: once for tools, prompts, resources
@@ -369,6 +398,7 @@ class TestMCPServerReconciliation:
         self,
         sample_mcpserver_spec: dict[str, Any],
         mock_logger: MagicMock,
+        sample_body: dict[str, Any],
     ) -> None:
         """Test that reconciliation handles empty tool/prompt/resource lists."""
         mock_k8s = MagicMock()
@@ -384,6 +414,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+                body=sample_body,
             )
 
         assert mock_patch_obj.status["toolCount"] == 0
@@ -396,6 +427,7 @@ class TestMCPServerReconciliation:
         sample_mcpserver_spec: dict[str, Any],
         mock_logger: MagicMock,
         mock_adopt: MagicMock,
+        sample_body: dict[str, Any],
     ) -> None:
         """Test that reconciliation creates a deployment."""
         mock_k8s = MagicMock()
@@ -413,6 +445,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+                body=sample_body,
             )
 
         mock_k8s.create_or_update_deployment.assert_called_once()
@@ -433,3 +466,39 @@ class TestMCPServerReconciliation:
         )
 
         mock_adopt.assert_called_once_with(deployment_body)
+
+    @pytest.mark.asyncio
+    async def test_reconcile_creates_service(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that reconciliation creates a Service."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        mock_k8s.create_or_update_service.assert_called_once()
+        call_kwargs = mock_k8s.create_or_update_service.call_args.kwargs
+        assert call_kwargs["name"] == "mcp-server-test-server"
+        assert call_kwargs["namespace"] == "default"
+        assert call_kwargs["selector"] == {
+            "app.kubernetes.io/name": "mcp-server",
+            "app.kubernetes.io/instance": "test-server",
+        }
+        assert call_kwargs["ports"][0]["port"] == 8080
+        assert call_kwargs["owner_reference"]["name"] == "test-server"
+        assert call_kwargs["owner_reference"]["uid"] == "test-uid-123"
