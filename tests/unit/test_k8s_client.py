@@ -453,3 +453,136 @@ class TestGetK8sClient:
             # Calling again should return the same instance
             client2 = get_k8s_client()
             assert client is client2
+
+
+class TestK8sClientCreateOrUpdateIngress:
+    """Tests for K8sClient.create_or_update_ingress."""
+
+    def test_create_ingress_if_not_exists(self) -> None:
+        """Test creating ingress if it doesn't exist."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        mock_ingress = MagicMock()
+        mock_ingress.to_dict.return_value = {"metadata": {"name": "test-ingress"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api") as mock_networking_v1,
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            # Mock read to raise 404
+            mock_networking_v1.return_value.read_namespaced_ingress.side_effect = ApiException(
+                status=404
+            )
+            # Mock create to return the ingress
+            mock_networking_v1.return_value.create_namespaced_ingress.return_value = mock_ingress
+
+            k8s = K8sClient()
+            result = k8s.create_or_update_ingress(
+                name="test-ingress",
+                namespace="default",
+                host="example.com",
+                path="/",
+                service_name="test-svc",
+                service_port=80,
+            )
+
+            assert result == {"metadata": {"name": "test-ingress"}}
+            mock_networking_v1.return_value.read_namespaced_ingress.assert_called_once()
+            mock_networking_v1.return_value.create_namespaced_ingress.assert_called_once()
+            mock_networking_v1.return_value.replace_namespaced_ingress.assert_not_called()
+
+    def test_update_ingress_if_exists(self) -> None:
+        """Test updating ingress if it exists."""
+        from kubernetes.config import ConfigException
+
+        mock_existing = MagicMock()
+        mock_existing.metadata.resource_version = "123"
+
+        mock_ingress = MagicMock()
+        mock_ingress.to_dict.return_value = {"metadata": {"name": "test-ingress"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api") as mock_networking_v1,
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            # Mock read to return existing
+            mock_networking_v1.return_value.read_namespaced_ingress.return_value = mock_existing
+            # Mock replace to succeed
+            mock_networking_v1.return_value.replace_namespaced_ingress.return_value = mock_ingress
+
+            k8s = K8sClient()
+            result = k8s.create_or_update_ingress(
+                name="test-ingress",
+                namespace="default",
+                host="example.com",
+                path="/",
+                service_name="test-svc",
+                service_port=80,
+            )
+
+            assert result == {"metadata": {"name": "test-ingress"}}
+            mock_networking_v1.return_value.read_namespaced_ingress.assert_called_once()
+            mock_networking_v1.return_value.replace_namespaced_ingress.assert_called_once()
+            mock_networking_v1.return_value.create_namespaced_ingress.assert_not_called()
+
+            # Verify resource_version was set
+            call_args = mock_networking_v1.return_value.replace_namespaced_ingress.call_args
+            body = call_args[0][2]
+            assert body.metadata.resource_version == "123"
+
+    def test_create_ingress_with_tls(self) -> None:
+        """Test creating ingress with TLS."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        mock_ingress = MagicMock()
+        mock_ingress.to_dict.return_value = {"metadata": {"name": "test-ingress"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api") as mock_networking_v1,
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_networking_v1.return_value.read_namespaced_ingress.side_effect = ApiException(
+                status=404
+            )
+            mock_networking_v1.return_value.create_namespaced_ingress.return_value = mock_ingress
+
+            k8s = K8sClient()
+            k8s.create_or_update_ingress(
+                name="test-ingress",
+                namespace="default",
+                host="example.com",
+                path="/",
+                service_name="test-svc",
+                service_port=80,
+                tls_secret_name="tls-secret",
+            )
+
+            # Verify call arguments
+            call_args = mock_networking_v1.return_value.create_namespaced_ingress.call_args
+            body = call_args[0][1]  # Second positional argument is body
+            assert body.spec.tls is not None
+            assert len(body.spec.tls) == 1
+            assert body.spec.tls[0].secret_name == "tls-secret"
