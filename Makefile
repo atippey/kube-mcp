@@ -1,7 +1,13 @@
 .PHONY: help install dev lint format test test-fast test-integration check fix run \
         k3d-create k3d-delete k3d-start k3d-stop k3d-status \
         k3d-crds k3d-redis k3d-examples k3d-build k3d-deploy \
-        kustomize-dev kustomize-k3d kustomize-prod
+        kustomize-dev kustomize-k3d kustomize-prod \
+        docker-build-multiarch
+
+# Image configuration
+IMAGE ?= mcp-operator
+TAG ?= latest
+REGISTRY ?= ""
 
 # Default target
 help:
@@ -30,6 +36,9 @@ help:
 	@echo "  make k3d-examples Deploy example resources"
 	@echo "  make k3d-build    Build and push operator image"
 	@echo "  make k3d-deploy   Deploy operator to cluster"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker-build-multiarch  Build and push multi-arch image (amd64, arm64)"
 	@echo ""
 	@echo "Kustomize:"
 	@echo "  make kustomize-dev   Apply dev overlay"
@@ -116,3 +125,10 @@ kustomize-k3d:
 
 kustomize-prod:
 	kubectl apply -k manifests/overlays/production
+
+# =============================================================================
+# Docker Builds
+# =============================================================================
+
+docker-build-multiarch:
+	./scripts/build_multiarch.sh $(IMAGE) $(TAG) $(REGISTRY)

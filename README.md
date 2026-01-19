@@ -115,6 +115,15 @@ make k3d-examples # Deploy example resources
 make k3d-delete   # Tear down cluster
 ```
 
+### Docker Builds
+
+To build and push multi-architecture images (amd64 + arm64):
+
+```bash
+# Build and push to a registry (requires docker buildx)
+make docker-build-multiarch REGISTRY=ghcr.io/yourorg IMAGE=mcp-operator TAG=latest
+```
+
 ### Deployment
 
 Using Kustomize overlays:
