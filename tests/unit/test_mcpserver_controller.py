@@ -238,7 +238,9 @@ class TestMCPServerReconciliation:
             )
 
         assert len(mock_patch_obj.status["conditions"]) > 0
-        ready_condition = next((c for c in mock_patch_obj.status["conditions"] if c["type"] == "Ready"), None)
+        ready_condition = next(
+            (c for c in mock_patch_obj.status["conditions"] if c["type"] == "Ready"), None
+        )
         assert ready_condition is not None
 
     @pytest.mark.asyncio
@@ -263,7 +265,9 @@ class TestMCPServerReconciliation:
                 patch=mock_patch_obj,
             )
 
-        ready_condition = next((c for c in mock_patch_obj.status["conditions"] if c["type"] == "Ready"), None)
+        ready_condition = next(
+            (c for c in mock_patch_obj.status["conditions"] if c["type"] == "Ready"), None
+        )
         assert ready_condition["status"] == "True"
         assert ready_condition["reason"] == "DeploymentReady"
 
@@ -289,7 +293,9 @@ class TestMCPServerReconciliation:
                 patch=mock_patch_obj,
             )
 
-        ready_condition = next((c for c in mock_patch_obj.status["conditions"] if c["type"] == "Ready"), None)
+        ready_condition = next(
+            (c for c in mock_patch_obj.status["conditions"] if c["type"] == "Ready"), None
+        )
         assert ready_condition["status"] == "False"
         assert ready_condition["reason"] == "DeploymentNotReady"
 
