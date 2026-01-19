@@ -1,5 +1,6 @@
 """Unit tests for MCPServer controller."""
 
+import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -149,7 +150,11 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+
                 body=sample_body,
+
+                
+
             )
 
         assert mock_patch_obj.status["toolCount"] == 2
@@ -179,7 +184,11 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+
                 body=sample_body,
+
+                
+
             )
 
         assert mock_patch_obj.status["toolCount"] == 2
@@ -209,7 +218,11 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+
                 body=sample_body,
+
+                
+
             )
 
         assert mock_patch_obj.status["readyReplicas"] == 2
@@ -235,7 +248,11 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+
                 body=sample_body,
+
+                
+
             )
 
         assert mock_patch_obj.status["readyReplicas"] == 0
@@ -261,7 +278,11 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+
                 body=sample_body,
+
+                
+
             )
 
         assert len(mock_patch_obj.status["conditions"]) > 0
@@ -291,7 +312,11 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+
                 body=sample_body,
+
+                
+
             )
 
         ready_condition = next(
@@ -321,7 +346,11 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+
                 body=sample_body,
+
+                
+
             )
 
         ready_condition = next(
@@ -351,7 +380,11 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+
                 body=sample_body,
+
+                
+
             )
 
         mock_logger.info.assert_called()
@@ -377,7 +410,11 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+
                 body=sample_body,
+
+                
+
             )
 
         # Should be called 3 times: once for tools, prompts, resources
@@ -414,7 +451,11 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
+
                 body=sample_body,
+
+                
+
             )
 
         assert mock_patch_obj.status["toolCount"] == 0
@@ -422,6 +463,7 @@ class TestMCPServerReconciliation:
         assert mock_patch_obj.status["resourceCount"] == 0
 
     @pytest.mark.asyncio
+
     async def test_reconcile_creates_deployment(
         self,
         sample_mcpserver_spec: dict[str, Any],
@@ -502,3 +544,65 @@ class TestMCPServerReconciliation:
         assert call_kwargs["ports"][0]["port"] == 8080
         assert call_kwargs["owner_reference"]["name"] == "test-server"
         assert call_kwargs["owner_reference"]["uid"] == "test-uid-123"
+
+    @pytest.mark.asyncio
+    async def test_reconcile_creates_configmap(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        mock_tools: list[dict[str, Any]],
+        mock_prompts: list[dict[str, Any]],
+        mock_resources: list[dict[str, Any]],
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that ConfigMap is created with correct data."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [mock_tools, mock_prompts, mock_resources]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        # Verify ConfigMap creation
+        mock_k8s.create_or_update_configmap.assert_called_once()
+        call_args = mock_k8s.create_or_update_configmap.call_args[1]
+
+        assert call_args["name"] == "mcp-server-test-server-config"
+        assert call_args["namespace"] == "default"
+
+        # Verify JSON content
+        data = call_args["data"]
+        tools_json = json.loads(data["tools.json"])
+        prompts_json = json.loads(data["prompts.json"])
+        resources_json = json.loads(data["resources.json"])
+
+        assert len(tools_json) == 2
+        assert tools_json[0]["name"] == "tool1"
+        assert tools_json[0]["endpoint"] == "http://svc1.default.svc.cluster.local:8080/"
+
+        assert len(prompts_json) == 1
+        assert prompts_json[0]["name"] == "prompt1"
+        assert prompts_json[0]["template"] == "Hello {{name}}"
+
+        assert len(resources_json) == 1
+        assert resources_json[0]["name"] == "resource1"
+        assert resources_json[0]["content"]["text"] == "data"
+
+        # Verify owner reference
+        owner_ref = call_args["owner_reference"]
+        assert owner_ref["name"] == "test-server"
+        assert owner_ref["uid"] == "test-uid-123"
+

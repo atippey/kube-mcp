@@ -7,6 +7,7 @@ Handles reconciliation of MCPServer resources. Responsible for:
 - Updating status with readyReplicas, toolCount, promptCount, resourceCount
 """
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -85,7 +86,7 @@ async def reconcile_mcpserver(
         namespace: The MCPServer namespace.
         logger: The kopf logger.
         patch: The kopf patch object.
-        body: The full resource body.
+        body: The full resource body (for owner references).
         **_: Additional kwargs from kopf.
     """
     logger.info(f"Reconciling MCPServer {namespace}/{name}")
@@ -131,6 +132,73 @@ async def reconcile_mcpserver(
     )
     resource_count = len(resources)
     logger.info(f"Found {resource_count} MCPResources matching selector")
+
+    # Generate ConfigMap
+    tools_data = []
+    for tool in tools:
+        tool_spec = tool.get("spec", {})
+        service_ref = tool_spec.get("service", {})
+
+        svc_name = service_ref.get("name")
+        svc_port = service_ref.get("port")
+        svc_path = service_ref.get("path", "/")
+        svc_ns = service_ref.get("namespace") or namespace
+
+        if svc_name and svc_port:
+            base_endpoint = k8s.get_service_endpoint(svc_name, svc_ns, svc_port)
+            if base_endpoint:
+                endpoint = f"{base_endpoint}{svc_path}"
+                tools_data.append(
+                    {
+                        "name": tool_spec.get("name"),
+                        "endpoint": endpoint,
+                        "inputSchema": tool_spec.get("inputSchema"),
+                    }
+                )
+
+    prompts_data = []
+    for prompt in prompts:
+        prompt_spec = prompt.get("spec", {})
+        prompts_data.append(
+            {
+                "name": prompt_spec.get("name"),
+                "template": prompt_spec.get("template"),
+                "variables": prompt_spec.get("variables", []),
+            }
+        )
+
+    resources_data = []
+    for resource in resources:
+        resource_spec = resource.get("spec", {})
+        resources_data.append(
+            {
+                "name": resource_spec.get("name"),
+                "content": resource_spec.get("content"),
+                "operations": resource_spec.get("operations"),
+            }
+        )
+
+    owner_ref = {
+        "apiVersion": body.get("apiVersion"),
+        "kind": body.get("kind"),
+        "name": name,
+        "uid": body.get("metadata", {}).get("uid"),
+        "controller": True,
+        "blockOwnerDeletion": True,
+    }
+
+    config_map_name = f"mcp-server-{name}-config"
+    k8s.create_or_update_configmap(
+        name=config_map_name,
+        namespace=namespace,
+        data={
+            "tools.json": json.dumps(tools_data),
+            "prompts.json": json.dumps(prompts_data),
+            "resources.json": json.dumps(resources_data),
+        },
+        owner_reference=owner_ref,
+    )
+    logger.info(f"Updated ConfigMap {config_map_name}")
 
     # Create Deployment
     deployment_name = f"mcp-server-{name}"
