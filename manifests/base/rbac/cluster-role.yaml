@@ -7,14 +7,14 @@ metadata:
     app.kubernetes.io/component: operator
 rules:
   # MCP custom resources
-  - apiGroups: ["mcp.example.com"]
+  - apiGroups: ["mcp.k8s.turd.ninja"]
     resources:
       - mcpservers
       - mcptools
       - mcpprompts
       - mcpresources
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["mcp.example.com"]
+  - apiGroups: ["mcp.k8s.turd.ninja"]
     resources:
       - mcpservers/status
       - mcptools/status

@@ -66,8 +66,8 @@ def _selector_to_dict(selector: Any) -> dict[str, Any]:
     return result
 
 
-@kopf.on.create("mcp.example.com", "v1alpha1", "mcpservers")
-@kopf.on.update("mcp.example.com", "v1alpha1", "mcpservers")
+@kopf.on.create("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")
+@kopf.on.update("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")
 async def reconcile_mcpserver(
     spec: dict[str, Any],
     name: str,
@@ -100,7 +100,7 @@ async def reconcile_mcpserver(
 
     # Find matching MCPTools
     tools = k8s.list_by_label_selector(
-        group="mcp.example.com",
+        group="mcp.k8s.turd.ninja",
         version="v1alpha1",
         plural="mcptools",
         namespace=namespace,
@@ -111,7 +111,7 @@ async def reconcile_mcpserver(
 
     # Find matching MCPPrompts
     prompts = k8s.list_by_label_selector(
-        group="mcp.example.com",
+        group="mcp.k8s.turd.ninja",
         version="v1alpha1",
         plural="mcpprompts",
         namespace=namespace,
@@ -122,7 +122,7 @@ async def reconcile_mcpserver(
 
     # Find matching MCPResources
     resources = k8s.list_by_label_selector(
-        group="mcp.example.com",
+        group="mcp.k8s.turd.ninja",
         version="v1alpha1",
         plural="mcpresources",
         namespace=namespace,
@@ -172,7 +172,7 @@ async def reconcile_mcpserver(
     }
 
 
-@kopf.on.delete("mcp.example.com", "v1alpha1", "mcpservers")
+@kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")
 async def delete_mcpserver(
     name: str,
     namespace: str,

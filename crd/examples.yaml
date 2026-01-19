@@ -5,7 +5,7 @@ This example shows a complete setup with GitHub and CircleCI integrations.
 ## 1. Deploy the MCP Server
 
 ```yaml
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPServer
 metadata:
   name: main
@@ -15,7 +15,7 @@ spec:
   redis:
     serviceName: mcp-redis
   ingress:
-    host: mcp.example.com
+    host: mcp.k8s.turd.ninja
     tlsSecretName: mcp-tls
     pathPrefix: /mcp
   toolSelector:
@@ -30,7 +30,7 @@ spec:
 
 ### GitHub Search Tool
 ```yaml
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPTool
 metadata:
   name: github-search
@@ -65,7 +65,7 @@ spec:
 
 ### GitHub Query Helper Prompt
 ```yaml
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPPrompt
 metadata:
   name: github-query-helper
@@ -97,7 +97,7 @@ spec:
 
 ### GitHub Documentation Resource
 ```yaml
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPResource
 metadata:
   name: github-docs
@@ -130,7 +130,7 @@ spec:
 
 ### CircleCI Pipeline Trigger Tool
 ```yaml
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPTool
 metadata:
   name: circleci-trigger
@@ -163,7 +163,7 @@ spec:
 
 ### CircleCI Config Resource (Inline Content)
 ```yaml
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPResource
 metadata:
   name: circleci-config-template

@@ -6,7 +6,7 @@ metadata:
   name: mcp-test
 ---
 # Simple MCPTool - references a non-existent service (expected to show not ready)
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPTool
 metadata:
   name: echo-tool
@@ -28,7 +28,7 @@ spec:
   method: POST
 ---
 # Simple MCPPrompt with valid template
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPPrompt
 metadata:
   name: greeting-prompt
@@ -50,7 +50,7 @@ spec:
       default: "the MCP system"
 ---
 # MCPPrompt with validation error (undeclared variable)
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPPrompt
 metadata:
   name: invalid-prompt
@@ -69,7 +69,7 @@ spec:
     # Note: 'score' is used in template but not declared - should fail validation
 ---
 # MCPResource with inline content
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPResource
 metadata:
   name: config-template
@@ -90,7 +90,7 @@ spec:
       }
 ---
 # MCPResource with operations (service-backed)
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPResource
 metadata:
   name: api-docs
@@ -113,7 +113,7 @@ spec:
           required: true
 ---
 # MCPServer that selects the above resources
-apiVersion: mcp.example.com/v1alpha1
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPServer
 metadata:
   name: test-server
