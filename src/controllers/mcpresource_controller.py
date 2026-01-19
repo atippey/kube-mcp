@@ -54,8 +54,9 @@ async def reconcile_mcpresource(
     name: str,
     namespace: str,
     logger: kopf.Logger,
+    patch: kopf.Patch,
     **_: object,
-) -> dict[str, Any]:
+) -> None:
     """Reconcile an MCPResource resource.
 
     Args:
@@ -63,10 +64,8 @@ async def reconcile_mcpresource(
         name: The MCPResource name.
         namespace: The MCPResource namespace.
         logger: The kopf logger.
+        patch: The kopf patch object.
         **_: Additional kwargs from kopf.
-
-    Returns:
-        Status update dict with ready, operationCount, conditions.
     """
     logger.info(f"Reconciling MCPResource {namespace}/{name}")
 
@@ -79,19 +78,18 @@ async def reconcile_mcpresource(
     # Check if neither operations nor content is provided
     if resource_spec.operations is None and resource_spec.content is None:
         logger.warning(f"MCPResource {name} has neither operations nor content")
-        return {
-            "ready": False,
-            "operationCount": 0,
-            "lastSyncTime": now,
-            "conditions": [
-                _create_condition(
-                    condition_type="Ready",
-                    status="False",
-                    reason="InvalidSpec",
-                    message="Resource must have either operations or content defined",
-                )
-            ],
-        }
+        patch.status["ready"] = False
+        patch.status["operationCount"] = 0
+        patch.status["lastSyncTime"] = now
+        patch.status["conditions"] = [
+            _create_condition(
+                condition_type="Ready",
+                status="False",
+                reason="InvalidSpec",
+                message="Resource must have either operations or content defined",
+            )
+        ]
+        return
 
     # Handle inline content
     if resource_spec.content is not None:
@@ -101,34 +99,32 @@ async def reconcile_mcpresource(
 
         if not has_text and not has_blob:
             logger.warning(f"MCPResource {name} has empty inline content")
-            return {
-                "ready": False,
-                "operationCount": 0,
-                "lastSyncTime": now,
-                "conditions": [
-                    _create_condition(
-                        condition_type="Ready",
-                        status="False",
-                        reason="EmptyContent",
-                        message="Inline content is empty (no text or blob data)",
-                    )
-                ],
-            }
-
-        logger.info(f"MCPResource {name} has valid inline content")
-        return {
-            "ready": True,
-            "operationCount": 0,
-            "lastSyncTime": now,
-            "conditions": [
+            patch.status["ready"] = False
+            patch.status["operationCount"] = 0
+            patch.status["lastSyncTime"] = now
+            patch.status["conditions"] = [
                 _create_condition(
                     condition_type="Ready",
-                    status="True",
-                    reason="ContentValid",
-                    message="Inline content validated successfully",
+                    status="False",
+                    reason="EmptyContent",
+                    message="Inline content is empty (no text or blob data)",
                 )
-            ],
-        }
+            ]
+            return
+
+        logger.info(f"MCPResource {name} has valid inline content")
+        patch.status["ready"] = True
+        patch.status["operationCount"] = 0
+        patch.status["lastSyncTime"] = now
+        patch.status["conditions"] = [
+            _create_condition(
+                condition_type="Ready",
+                status="True",
+                reason="ContentValid",
+                message="Inline content validated successfully",
+            )
+        ]
+        return
 
     # Handle service-backed operations
     if resource_spec.operations:
@@ -143,42 +139,38 @@ async def reconcile_mcpresource(
                 logger.warning(
                     f"Service {operation.service.name} not found in namespace {service_namespace}"
                 )
-                return {
-                    "ready": False,
-                    "operationCount": operation_count,
-                    "lastSyncTime": now,
-                    "conditions": [
-                        _create_condition(
-                            condition_type="Ready",
-                            status="False",
-                            reason="ServiceNotFound",
-                            message=f"Service {operation.service.name} not found in namespace {service_namespace}",
-                        )
-                    ],
-                }
+                patch.status["ready"] = False
+                patch.status["operationCount"] = operation_count
+                patch.status["lastSyncTime"] = now
+                patch.status["conditions"] = [
+                    _create_condition(
+                        condition_type="Ready",
+                        status="False",
+                        reason="ServiceNotFound",
+                        message=f"Service {operation.service.name} not found in namespace {service_namespace}",
+                    )
+                ]
+                return
 
         logger.info(f"MCPResource {name} has {operation_count} valid operations")
-        return {
-            "ready": True,
-            "operationCount": operation_count,
-            "lastSyncTime": now,
-            "conditions": [
-                _create_condition(
-                    condition_type="Ready",
-                    status="True",
-                    reason="OperationsValid",
-                    message=f"All {operation_count} operation(s) validated successfully",
-                )
-            ],
-        }
+        patch.status["ready"] = True
+        patch.status["operationCount"] = operation_count
+        patch.status["lastSyncTime"] = now
+        patch.status["conditions"] = [
+            _create_condition(
+                condition_type="Ready",
+                status="True",
+                reason="OperationsValid",
+                message=f"All {operation_count} operation(s) validated successfully",
+            )
+        ]
+        return
 
     # Should not reach here, but just in case
-    return {
-        "ready": False,
-        "operationCount": 0,
-        "lastSyncTime": now,
-        "conditions": [],
-    }
+    patch.status["ready"] = False
+    patch.status["operationCount"] = 0
+    patch.status["lastSyncTime"] = now
+    patch.status["conditions"] = []
 
 
 @kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpresources")

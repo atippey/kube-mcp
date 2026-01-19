@@ -125,7 +125,7 @@ After updating the YAML, Jules should check if the Makefile has a make apply-crd
 
 ## Task 4: Debug kopf status patching issue
 
-**Status:** Pending
+**Status:** Completed
 
 **Description:**
 The kopf operator is correctly reconciling resources but status updates are not persisting. The CRDs have `subresources.status: {}` configured, and RBAC allows patching `*/status` resources, but kopf logs show:

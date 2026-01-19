@@ -73,17 +73,20 @@ class TestMCPResourceReconciliation:
         mock_k8s.get_service_endpoint.return_value = (
             "http://github-docs-svc.default.svc.cluster.local:8080"
         )
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpresource_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcpresource(
+            await reconcile_mcpresource(
                 spec=sample_mcpresource_spec_operations,
                 name="github-docs",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        assert result["ready"] is True
-        assert result["operationCount"] == 1
+        assert mock_patch_obj.status["ready"] is True
+        assert mock_patch_obj.status["operationCount"] == 1
         mock_k8s.get_service.assert_called_once()
 
     @pytest.mark.asyncio
@@ -95,20 +98,23 @@ class TestMCPResourceReconciliation:
         """Test that reconciliation sets ready=False when service doesn't exist."""
         mock_k8s = MagicMock()
         mock_k8s.get_service.return_value = None
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpresource_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcpresource(
+            await reconcile_mcpresource(
                 spec=sample_mcpresource_spec_operations,
                 name="github-docs",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        assert result["ready"] is False
-        assert len(result["conditions"]) > 0
-        assert result["conditions"][0]["type"] == "Ready"
-        assert result["conditions"][0]["status"] == "False"
-        assert "not found" in result["conditions"][0]["message"].lower()
+        assert mock_patch_obj.status["ready"] is False
+        assert len(mock_patch_obj.status["conditions"]) > 0
+        assert mock_patch_obj.status["conditions"][0]["type"] == "Ready"
+        assert mock_patch_obj.status["conditions"][0]["status"] == "False"
+        assert "not found" in mock_patch_obj.status["conditions"][0]["message"].lower()
 
     @pytest.mark.asyncio
     async def test_reconcile_inline_content_sets_ready_true(
@@ -117,15 +123,18 @@ class TestMCPResourceReconciliation:
         mock_logger: MagicMock,
     ) -> None:
         """Test that reconciliation sets ready=True for valid inline content."""
-        result = await reconcile_mcpresource(
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+        await reconcile_mcpresource(
             spec=sample_mcpresource_spec_inline,
             name="config-template",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
-        assert result["ready"] is True
-        assert result["operationCount"] == 0
+        assert mock_patch_obj.status["ready"] is True
+        assert mock_patch_obj.status["operationCount"] == 0
 
     @pytest.mark.asyncio
     async def test_reconcile_empty_content_sets_ready_false(
@@ -141,17 +150,20 @@ class TestMCPResourceReconciliation:
                 "text": "",
             },
         }
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
-        result = await reconcile_mcpresource(
+        await reconcile_mcpresource(
             spec=spec,
             name="empty-content",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
-        assert result["ready"] is False
-        assert len(result["conditions"]) > 0
-        assert "empty" in result["conditions"][0]["message"].lower()
+        assert mock_patch_obj.status["ready"] is False
+        assert len(mock_patch_obj.status["conditions"]) > 0
+        assert "empty" in mock_patch_obj.status["conditions"][0]["message"].lower()
 
     @pytest.mark.asyncio
     async def test_reconcile_neither_operations_nor_content_sets_ready_false(
@@ -163,17 +175,20 @@ class TestMCPResourceReconciliation:
             "name": "invalid-resource",
             "description": "Has neither operations nor content",
         }
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
-        result = await reconcile_mcpresource(
+        await reconcile_mcpresource(
             spec=spec,
             name="invalid-resource",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
-        assert result["ready"] is False
-        assert len(result["conditions"]) > 0
-        assert result["conditions"][0]["status"] == "False"
+        assert mock_patch_obj.status["ready"] is False
+        assert len(mock_patch_obj.status["conditions"]) > 0
+        assert mock_patch_obj.status["conditions"][0]["status"] == "False"
 
     @pytest.mark.asyncio
     async def test_reconcile_sets_last_sync_time(
@@ -182,16 +197,19 @@ class TestMCPResourceReconciliation:
         mock_logger: MagicMock,
     ) -> None:
         """Test that reconciliation sets lastSyncTime."""
-        result = await reconcile_mcpresource(
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+        await reconcile_mcpresource(
             spec=sample_mcpresource_spec_inline,
             name="config-template",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
-        assert result["lastSyncTime"] is not None
+        assert mock_patch_obj.status["lastSyncTime"] is not None
         # Should be a valid ISO format timestamp
-        datetime.fromisoformat(result["lastSyncTime"].replace("Z", "+00:00"))
+        datetime.fromisoformat(mock_patch_obj.status["lastSyncTime"].replace("Z", "+00:00"))
 
     @pytest.mark.asyncio
     async def test_reconcile_ready_condition_when_ready(
@@ -200,14 +218,19 @@ class TestMCPResourceReconciliation:
         mock_logger: MagicMock,
     ) -> None:
         """Test that Ready condition is True when resource is valid."""
-        result = await reconcile_mcpresource(
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+        await reconcile_mcpresource(
             spec=sample_mcpresource_spec_inline,
             name="config-template",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
-        ready_condition = next((c for c in result["conditions"] if c["type"] == "Ready"), None)
+        ready_condition = next(
+            (c for c in mock_patch_obj.status["conditions"] if c["type"] == "Ready"), None
+        )
         assert ready_condition is not None
         assert ready_condition["status"] == "True"
         assert ready_condition["reason"] == "ContentValid"
@@ -219,11 +242,14 @@ class TestMCPResourceReconciliation:
         mock_logger: MagicMock,
     ) -> None:
         """Test that reconciliation logs appropriate info."""
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
         await reconcile_mcpresource(
             spec=sample_mcpresource_spec_inline,
             name="config-template",
             namespace="default",
             logger=mock_logger,
+            patch=mock_patch_obj,
         )
 
         mock_logger.info.assert_called()
@@ -259,16 +285,19 @@ class TestMCPResourceReconciliation:
         mock_k8s = MagicMock()
         mock_k8s.get_service.return_value = {"metadata": {"name": "svc"}}
         mock_k8s.get_service_endpoint.return_value = "http://svc.default.svc.cluster.local:8080"
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpresource_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcpresource(
+            await reconcile_mcpresource(
                 spec=spec,
                 name="multi-op",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
-        assert result["operationCount"] == 3
+        assert mock_patch_obj.status["operationCount"] == 3
 
     @pytest.mark.asyncio
     async def test_reconcile_resolves_endpoint_same_namespace(
@@ -282,6 +311,8 @@ class TestMCPResourceReconciliation:
         mock_k8s.get_service_endpoint.return_value = (
             "http://github-docs-svc.mcp-system.svc.cluster.local:8080"
         )
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpresource_controller.get_k8s_client", return_value=mock_k8s):
             await reconcile_mcpresource(
@@ -289,6 +320,7 @@ class TestMCPResourceReconciliation:
                 name="github-docs",
                 namespace="mcp-system",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
         # Service lookup should use MCPResource's namespace
@@ -321,15 +353,18 @@ class TestMCPResourceReconciliation:
         mock_k8s.get_service_endpoint.return_value = (
             "http://data-svc.data-ns.svc.cluster.local:9000"
         )
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
 
         with patch("src.controllers.mcpresource_controller.get_k8s_client", return_value=mock_k8s):
-            result = await reconcile_mcpresource(
+            await reconcile_mcpresource(
                 spec=spec,
                 name="cross-ns-resource",
                 namespace="default",
                 logger=mock_logger,
+                patch=mock_patch_obj,
             )
 
         # Service lookup should use explicit namespace
         mock_k8s.get_service.assert_called_with("data-svc", "data-ns")
-        assert result["ready"] is True
+        assert mock_patch_obj.status["ready"] is True
