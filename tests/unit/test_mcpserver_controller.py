@@ -106,6 +106,12 @@ class TestMCPServerReconciliation:
             },
         ]
 
+    @pytest.fixture(autouse=True)
+    def mock_adopt(self) -> MagicMock:
+        """Mock kopf.adopt for all tests in this class."""
+        with patch("src.controllers.mcpserver_controller.kopf.adopt") as mock:
+            yield mock
+
     @pytest.mark.asyncio
     async def test_reconcile_finds_tools_by_selector(
         self,
@@ -383,3 +389,47 @@ class TestMCPServerReconciliation:
         assert mock_patch_obj.status["toolCount"] == 0
         assert mock_patch_obj.status["promptCount"] == 0
         assert mock_patch_obj.status["resourceCount"] == 0
+
+    @pytest.mark.asyncio
+    async def test_reconcile_creates_deployment(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        mock_adopt: MagicMock,
+    ) -> None:
+        """Test that reconciliation creates a deployment."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch(
+            "src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s
+        ):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+            )
+
+        mock_k8s.create_or_update_deployment.assert_called_once()
+        call_args = mock_k8s.create_or_update_deployment.call_args
+        assert call_args[0][0] == "mcp-server-test-server"
+        assert call_args[0][1] == "default"
+
+        deployment_body = call_args[0][2]
+        assert deployment_body["metadata"]["name"] == "mcp-server-test-server"
+        assert deployment_body["spec"]["replicas"] == 2
+        assert (
+            deployment_body["spec"]["template"]["spec"]["containers"][0]["image"]
+            == "ghcr.io/atippey/mcp-server:latest"
+        )
+        assert (
+            deployment_body["spec"]["template"]["spec"]["containers"][0]["env"][0]["value"]
+            == "mcp-redis"
+        )
+
+        mock_adopt.assert_called_once_with(deployment_body)

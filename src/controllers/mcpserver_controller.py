@@ -130,8 +130,60 @@ async def reconcile_mcpserver(
     resource_count = len(resources)
     logger.info(f"Found {resource_count} MCPResources matching selector")
 
-    # Check deployment status
+    # Create Deployment
     deployment_name = f"mcp-server-{name}"
+    deployment_labels = {
+        "app.kubernetes.io/name": "mcp-server",
+        "app.kubernetes.io/instance": name,
+        "mcp.k8s.turd.ninja/server": name,
+    }
+
+    deployment_body = {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "metadata": {
+            "name": deployment_name,
+            "namespace": namespace,
+            "labels": deployment_labels,
+        },
+        "spec": {
+            "replicas": server_spec.replicas,
+            "selector": {
+                "matchLabels": {
+                    "app.kubernetes.io/name": "mcp-server",
+                    "app.kubernetes.io/instance": name,
+                }
+            },
+            "template": {
+                "metadata": {
+                    "labels": deployment_labels,
+                },
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "server",
+                            "image": "ghcr.io/atippey/mcp-server:latest",
+                            "ports": [{"containerPort": 8080}],
+                            "env": [
+                                {
+                                    "name": "REDIS_HOST",
+                                    "value": server_spec.redis.serviceName,
+                                }
+                            ],
+                        }
+                    ]
+                },
+            },
+        },
+    }
+
+    # Set owner reference
+    kopf.adopt(deployment_body)
+
+    # Create or update deployment
+    k8s.create_or_update_deployment(deployment_name, namespace, deployment_body)
+
+    # Check deployment status
     deployment = k8s.get_deployment(deployment_name, namespace)
 
     ready_replicas = 0
