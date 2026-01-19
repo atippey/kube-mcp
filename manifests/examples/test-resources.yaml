@@ -1,0 +1,130 @@
+---
+# Test namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mcp-test
+---
+# Simple MCPTool - references a non-existent service (expected to show not ready)
+apiVersion: mcp.example.com/v1alpha1
+kind: MCPTool
+metadata:
+  name: echo-tool
+  namespace: mcp-test
+  labels:
+    mcp-server: test
+spec:
+  name: echo
+  description: Simple echo tool for testing
+  service:
+    name: echo-svc
+    port: 8080
+    path: /echo
+  inputSchema:
+    type: object
+    properties:
+      message:
+        type: string
+  method: POST
+---
+# Simple MCPPrompt with valid template
+apiVersion: mcp.example.com/v1alpha1
+kind: MCPPrompt
+metadata:
+  name: greeting-prompt
+  namespace: mcp-test
+  labels:
+    mcp-server: test
+spec:
+  name: greeting
+  description: A simple greeting prompt
+  template: |
+    Hello {{name}}! Welcome to {{location}}.
+  variables:
+    - name: name
+      description: Person's name
+      required: true
+    - name: location
+      description: Location name
+      required: false
+      default: "the MCP system"
+---
+# MCPPrompt with validation error (undeclared variable)
+apiVersion: mcp.example.com/v1alpha1
+kind: MCPPrompt
+metadata:
+  name: invalid-prompt
+  namespace: mcp-test
+  labels:
+    mcp-server: test
+spec:
+  name: invalid
+  description: Prompt with undeclared variable
+  template: |
+    Hello {{name}}! Your score is {{score}}.
+  variables:
+    - name: name
+      description: Person's name
+      required: true
+    # Note: 'score' is used in template but not declared - should fail validation
+---
+# MCPResource with inline content
+apiVersion: mcp.example.com/v1alpha1
+kind: MCPResource
+metadata:
+  name: config-template
+  namespace: mcp-test
+  labels:
+    mcp-server: test
+spec:
+  name: config-template
+  description: Sample configuration template
+  content:
+    uri: "config://test/template"
+    mimeType: "application/json"
+    text: |
+      {
+        "version": "1.0",
+        "environment": "test",
+        "features": ["auth", "logging"]
+      }
+---
+# MCPResource with operations (service-backed)
+apiVersion: mcp.example.com/v1alpha1
+kind: MCPResource
+metadata:
+  name: api-docs
+  namespace: mcp-test
+  labels:
+    mcp-server: test
+spec:
+  name: api-docs
+  description: API documentation resource
+  operations:
+    - method: GET
+      ingressPath: /docs/{section}
+      service:
+        name: docs-svc
+        port: 8080
+        path: /api/docs/{section}
+      parameters:
+        - name: section
+          in: path
+          required: true
+---
+# MCPServer that selects the above resources
+apiVersion: mcp.example.com/v1alpha1
+kind: MCPServer
+metadata:
+  name: test-server
+  namespace: mcp-test
+spec:
+  replicas: 1
+  redis:
+    serviceName: redis
+  toolSelector:
+    matchLabels:
+      mcp-server: test
+  config:
+    requestTimeout: 30s
+    maxConcurrentRequests: 10
