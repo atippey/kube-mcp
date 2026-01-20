@@ -162,7 +162,7 @@ Either:
 
 ## Task 5: MCPServer Controller - Create Deployment
 
-**Status:** Pending
+**Status:** Completed
 
 **Description:**
 Add Deployment creation to the MCPServer controller. When an MCPServer is created/updated, the controller should create or update a Kubernetes Deployment that runs the MCP server pods.
@@ -197,7 +197,7 @@ kubectl get deployment mcp-server-test-server -n mcp-test
 
 ## Task 6: MCPServer Controller - Create Service
 
-**Status:** Pending
+**Status:** Completed
 
 **Description:**
 Add Service creation to the MCPServer controller. The Service exposes the MCP server Deployment.
@@ -270,7 +270,7 @@ kubectl get configmap mcp-server-test-server-config -n mcp-test -o yaml
 
 ## Task 8: MCPServer Controller - Create Ingress (Optional)
 
-**Status:** Pending
+**Status:** Completed
 
 **Description:**
 Add optional Ingress creation when `spec.ingress` is configured on MCPServer.
