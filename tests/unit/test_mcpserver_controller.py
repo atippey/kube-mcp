@@ -606,3 +606,73 @@ class TestMCPServerReconciliation:
         assert owner_ref["name"] == "test-server"
         assert owner_ref["uid"] == "test-uid-123"
 
+    @pytest.mark.asyncio
+    async def test_reconcile_creates_ingress(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that Ingress is created when configured."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        # Add ingress config
+        sample_mcpserver_spec["ingress"] = {
+            "host": "test.example.com",
+            "pathPrefix": "/api",
+            "tlsSecretName": "tls-secret",
+        }
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        mock_k8s.create_or_update_ingress.assert_called_once()
+        call_args = mock_k8s.create_or_update_ingress.call_args.kwargs
+        assert call_args["name"] == "mcp-server-test-server"
+        assert call_args["host"] == "test.example.com"
+        assert call_args["path"] == "/api"
+        assert call_args["tls_secret_name"] == "tls-secret"
+        assert call_args["service_name"] == "mcp-server-test-server"
+        assert call_args["service_port"] == 8080
+        assert call_args["owner_reference"]["uid"] == "test-uid-123"
+
+    @pytest.mark.asyncio
+    async def test_reconcile_skips_ingress(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that Ingress is not created when not configured."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        # Ensure ingress is missing
+        if "ingress" in sample_mcpserver_spec:
+            del sample_mcpserver_spec["ingress"]
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        mock_k8s.create_or_update_ingress.assert_not_called()

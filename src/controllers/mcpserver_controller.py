@@ -200,6 +200,29 @@ async def reconcile_mcpserver(
     )
     logger.info(f"Updated ConfigMap {config_map_name}")
 
+    # Create Ingress if configured
+    if server_spec.ingress:
+        logger.info(f"Creating/updating Ingress for MCPServer {name}")
+        ingress_owner_ref = {
+            "apiVersion": "mcp.k8s.turd.ninja/v1alpha1",
+            "kind": "MCPServer",
+            "name": name,
+            "uid": body["metadata"]["uid"],
+            "controller": True,
+            "blockOwnerDeletion": True,
+        }
+
+        k8s.create_or_update_ingress(
+            name=f"mcp-server-{name}",
+            namespace=namespace,
+            host=server_spec.ingress.host,
+            path=server_spec.ingress.pathPrefix,
+            service_name=f"mcp-server-{name}",
+            service_port=8080,
+            tls_secret_name=server_spec.ingress.tlsSecretName,
+            owner_reference=ingress_owner_ref,
+        )
+
     # Create Deployment
     deployment_name = f"mcp-server-{name}"
     deployment_labels = {

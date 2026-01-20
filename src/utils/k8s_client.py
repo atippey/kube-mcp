@@ -280,6 +280,87 @@ class K8sClient:
 
         return result.to_dict()  # type: ignore[no-any-return]
 
+    def create_or_update_ingress(
+        self,
+        name: str,
+        namespace: str,
+        host: str | None,
+        path: str,
+        service_name: str,
+        service_port: int,
+        tls_secret_name: str | None = None,
+        owner_reference: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create or update an Ingress.
+
+        Args:
+            name: The Ingress name.
+            namespace: The Ingress namespace.
+            host: The Ingress host (optional).
+            path: The Ingress path.
+            service_name: The backend service name.
+            service_port: The backend service port.
+            tls_secret_name: Optional TLS secret name.
+            owner_reference: Optional owner reference.
+
+        Returns:
+            The created/updated Ingress.
+        """
+        metadata: dict[str, Any] = {"name": name, "namespace": namespace}
+        if owner_reference:
+            metadata["ownerReferences"] = [owner_reference]
+
+        # Define Ingress Rule
+        path_type = "Prefix"
+        backend = client.V1IngressBackend(
+            service=client.V1IngressServiceBackend(
+                name=service_name,
+                port=client.V1ServiceBackendPort(number=service_port),
+            )
+        )
+
+        http_ingress_path = client.V1HTTPIngressPath(
+            path=path,
+            path_type=path_type,
+            backend=backend,
+        )
+
+        rule = client.V1IngressRule(
+            host=host,
+            http=client.V1HTTPIngressRuleValue(paths=[http_ingress_path]),
+        )
+
+        # Define TLS
+        tls = []
+        if tls_secret_name:
+            tls_entry = client.V1IngressTLS(
+                hosts=[host] if host else [],
+                secret_name=tls_secret_name,
+            )
+            tls.append(tls_entry)
+
+        body = client.V1Ingress(
+            api_version="networking.k8s.io/v1",
+            kind="Ingress",
+            metadata=client.V1ObjectMeta(**metadata),
+            spec=client.V1IngressSpec(
+                rules=[rule],
+                tls=tls if tls else None,
+            ),
+        )
+
+        try:
+            existing = self.networking_v1.read_namespaced_ingress(name, namespace)
+            body.metadata.resource_version = existing.metadata.resource_version
+            result = self.networking_v1.replace_namespaced_ingress(name, namespace, body)
+        except ApiException as e:
+            if e.status == 404:
+                result = self.networking_v1.create_namespaced_ingress(namespace, body)
+            else:
+                raise
+
+        return result.to_dict()
+
 
 # Module-level client instance (lazy initialization)
 _client: K8sClient | None = None
