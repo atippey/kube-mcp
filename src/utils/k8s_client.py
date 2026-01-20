@@ -81,6 +81,32 @@ class K8sClient:
                 return None
             raise
 
+    def create_or_update_deployment(
+        self,
+        name: str,
+        namespace: str,
+        body: client.V1Deployment | dict[str, Any],
+    ) -> dict[str, Any]:
+        """Create or update a Deployment.
+
+        Args:
+            name: The deployment name.
+            namespace: The deployment namespace.
+            body: The deployment body.
+
+        Returns:
+            The created/updated deployment as a dict.
+        """
+        try:
+            result = self.apps_v1.patch_namespaced_deployment(name, namespace, body)
+        except ApiException as e:
+            if e.status == 404:
+                result = self.apps_v1.create_namespaced_deployment(namespace, body)
+            else:
+                raise
+
+        return result.to_dict()
+
     def list_by_label_selector(
         self,
         group: str,

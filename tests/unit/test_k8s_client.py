@@ -195,6 +195,74 @@ class TestK8sClientGetDeployment:
             assert result is None
 
 
+class TestK8sClientCreateOrUpdateDeployment:
+    """Tests for K8sClient.create_or_update_deployment."""
+
+    def test_create_or_update_deployment_patches_when_exists(self) -> None:
+        """Test that patch is called when deployment exists."""
+        from kubernetes.config import ConfigException
+
+        mock_deployment = {"metadata": {"name": "test-deploy"}}
+        mock_result = MagicMock()
+        mock_result.to_dict.return_value = mock_deployment
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api") as mock_apps_v1,
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_apps_v1.return_value.patch_namespaced_deployment.return_value = mock_result
+
+            k8s = K8sClient()
+            result = k8s.create_or_update_deployment("test-deploy", "default", mock_deployment)
+
+            assert result == mock_deployment
+            mock_apps_v1.return_value.patch_namespaced_deployment.assert_called_once_with(
+                "test-deploy", "default", mock_deployment
+            )
+            mock_apps_v1.return_value.create_namespaced_deployment.assert_not_called()
+
+    def test_create_or_update_deployment_creates_when_missing(self) -> None:
+        """Test that create is called when patch fails with 404."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        mock_deployment = {"metadata": {"name": "test-deploy"}}
+        mock_result = MagicMock()
+        mock_result.to_dict.return_value = mock_deployment
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api") as mock_apps_v1,
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_apps_v1.return_value.patch_namespaced_deployment.side_effect = ApiException(
+                status=404, reason="Not Found"
+            )
+            mock_apps_v1.return_value.create_namespaced_deployment.return_value = mock_result
+
+            k8s = K8sClient()
+            result = k8s.create_or_update_deployment("test-deploy", "default", mock_deployment)
+
+            assert result == mock_deployment
+            mock_apps_v1.return_value.patch_namespaced_deployment.assert_called_once()
+            mock_apps_v1.return_value.create_namespaced_deployment.assert_called_once_with(
+                "default", mock_deployment
+            )
+
+
 class TestK8sClientListByLabelSelector:
     """Tests for K8sClient.list_by_label_selector."""
 
