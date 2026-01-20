@@ -150,11 +150,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
-
                 body=sample_body,
-
-                
-
             )
 
         assert mock_patch_obj.status["toolCount"] == 2
@@ -184,11 +180,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
-
                 body=sample_body,
-
-                
-
             )
 
         assert mock_patch_obj.status["toolCount"] == 2
@@ -218,11 +210,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
-
                 body=sample_body,
-
-                
-
             )
 
         assert mock_patch_obj.status["readyReplicas"] == 2
@@ -248,11 +236,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
-
                 body=sample_body,
-
-                
-
             )
 
         assert mock_patch_obj.status["readyReplicas"] == 0
@@ -278,11 +262,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
-
                 body=sample_body,
-
-                
-
             )
 
         assert len(mock_patch_obj.status["conditions"]) > 0
@@ -312,11 +292,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
-
                 body=sample_body,
-
-                
-
             )
 
         ready_condition = next(
@@ -346,11 +322,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
-
                 body=sample_body,
-
-                
-
             )
 
         ready_condition = next(
@@ -380,11 +352,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
-
                 body=sample_body,
-
-                
-
             )
 
         mock_logger.info.assert_called()
@@ -410,11 +378,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
-
                 body=sample_body,
-
-                
-
             )
 
         # Should be called 3 times: once for tools, prompts, resources
@@ -451,11 +415,7 @@ class TestMCPServerReconciliation:
                 namespace="default",
                 logger=mock_logger,
                 patch=mock_patch_obj,
-
                 body=sample_body,
-
-                
-
             )
 
         assert mock_patch_obj.status["toolCount"] == 0
@@ -463,7 +423,6 @@ class TestMCPServerReconciliation:
         assert mock_patch_obj.status["resourceCount"] == 0
 
     @pytest.mark.asyncio
-
     async def test_reconcile_creates_deployment(
         self,
         sample_mcpserver_spec: dict[str, Any],
@@ -478,9 +437,7 @@ class TestMCPServerReconciliation:
         mock_patch_obj = MagicMock()
         mock_patch_obj.status = {}
 
-        with patch(
-            "src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s
-        ):
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
             await reconcile_mcpserver(
                 spec=sample_mcpserver_spec,
                 name="test-server",
