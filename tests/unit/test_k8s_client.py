@@ -90,6 +90,32 @@ class TestK8sClientGetService:
 
             assert result is None
 
+    def test_get_service_raises_on_other_error(self) -> None:
+        """Test that other exceptions are raised."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api") as mock_core_v1,
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_core_v1.return_value.read_namespaced_service.side_effect = ApiException(
+                status=500
+            )
+            k8s = K8sClient()
+            try:
+                k8s.get_service("test-svc", "default")
+                assert False, "Should have raised ApiException"
+            except ApiException as e:
+                assert e.status == 500
+
 
 class TestK8sClientGetServiceEndpoint:
     """Tests for K8sClient.get_service_endpoint."""
@@ -194,6 +220,32 @@ class TestK8sClientGetDeployment:
 
             assert result is None
 
+    def test_get_deployment_raises_on_other_error(self) -> None:
+        """Test that other exceptions are raised."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api") as mock_apps_v1,
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_apps_v1.return_value.read_namespaced_deployment.side_effect = ApiException(
+                status=500
+            )
+            k8s = K8sClient()
+            try:
+                k8s.get_deployment("test-deploy", "default")
+                assert False, "Should have raised ApiException"
+            except ApiException as e:
+                assert e.status == 500
+
 
 class TestK8sClientCreateOrUpdateDeployment:
     """Tests for K8sClient.create_or_update_deployment."""
@@ -262,6 +314,35 @@ class TestK8sClientCreateOrUpdateDeployment:
                 "default", mock_deployment
             )
 
+    def test_create_or_update_deployment_raises_on_other_error(self) -> None:
+        """Test that other exceptions are raised."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        mock_deployment = {"metadata": {"name": "test-deploy"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api") as mock_apps_v1,
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_apps_v1.return_value.patch_namespaced_deployment.side_effect = ApiException(
+                status=500
+            )
+
+            k8s = K8sClient()
+            try:
+                k8s.create_or_update_deployment("test-deploy", "default", mock_deployment)
+                assert False, "Should have raised ApiException"
+            except ApiException as e:
+                assert e.status == 500
+
 
 class TestK8sClientListByLabelSelector:
     """Tests for K8sClient.list_by_label_selector."""
@@ -325,6 +406,36 @@ class TestK8sClientListByLabelSelector:
 
             assert len(result) == 0
 
+    def test_list_by_label_selector_handles_exception(self) -> None:
+        """Test listing resources handles exception gracefully."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi") as mock_custom,
+        ):
+            mock_custom.return_value.list_namespaced_custom_object.side_effect = ApiException(
+                status=500
+            )
+            k8s = K8sClient()
+            result = k8s.list_by_label_selector(
+                group="mcp.k8s.turd.ninja",
+                version="v1alpha1",
+                plural="mcptools",
+                namespace="default",
+                label_selector={"matchLabels": {"app": "test"}},
+            )
+
+            assert len(result) == 0
+
 
 class TestK8sClientBuildLabelSelectorString:
     """Tests for K8sClient._build_label_selector_string."""
@@ -378,6 +489,32 @@ class TestK8sClientBuildLabelSelectorString:
             )
 
             assert "env in (dev,staging)" in result
+
+    def test_build_match_expressions_not_in(self) -> None:
+        """Test building selector string from matchExpressions with NotIn operator."""
+        from kubernetes.config import ConfigException
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            k8s = K8sClient()
+            result = k8s._build_label_selector_string(
+                {
+                    "matchExpressions": [
+                        {"key": "env", "operator": "NotIn", "values": ["prod"]}
+                    ]
+                }
+            )
+
+            assert "env notin (prod)" in result
 
     def test_build_match_expressions_exists(self) -> None:
         """Test building selector string with Exists operator."""
@@ -586,3 +723,396 @@ class TestK8sClientCreateOrUpdateIngress:
             assert body.spec.tls is not None
             assert len(body.spec.tls) == 1
             assert body.spec.tls[0].secret_name == "tls-secret"
+
+    def test_create_ingress_with_owner_reference(self) -> None:
+        """Test creating ingress with owner reference."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        mock_ingress = MagicMock()
+        mock_ingress.to_dict.return_value = {"metadata": {"name": "test-ingress"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api") as mock_networking_v1,
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_networking_v1.return_value.read_namespaced_ingress.side_effect = ApiException(
+                status=404
+            )
+            mock_networking_v1.return_value.create_namespaced_ingress.return_value = mock_ingress
+
+            owner_ref = {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "name": "owner",
+                "uid": "123",
+            }
+
+            k8s = K8sClient()
+            k8s.create_or_update_ingress(
+                name="test-ingress",
+                namespace="default",
+                host="example.com",
+                path="/",
+                service_name="test-svc",
+                service_port=80,
+                owner_reference=owner_ref,
+            )
+
+            # Check if owner reference was added to metadata
+            call_args = mock_networking_v1.return_value.create_namespaced_ingress.call_args
+            body = call_args[0][1]
+            assert len(body.metadata.owner_references) == 1
+            assert body.metadata.owner_references[0].name == "owner"
+
+    def test_create_ingress_raises_on_other_error(self) -> None:
+        """Test that other exceptions are raised."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api") as mock_networking_v1,
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_networking_v1.return_value.read_namespaced_ingress.side_effect = ApiException(
+                status=500
+            )
+
+            k8s = K8sClient()
+            try:
+                k8s.create_or_update_ingress(
+                    name="test-ingress",
+                    namespace="default",
+                    host="example.com",
+                    path="/",
+                    service_name="test-svc",
+                    service_port=80,
+                )
+                assert False, "Should have raised ApiException"
+            except ApiException as e:
+                assert e.status == 500
+
+
+class TestK8sClientCreateOrUpdateConfigMap:
+    """Tests for K8sClient.create_or_update_configmap."""
+
+    def test_create_configmap_if_not_exists(self) -> None:
+        """Test creating configmap if it doesn't exist."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        mock_cm = MagicMock()
+        mock_cm.to_dict.return_value = {"metadata": {"name": "test-cm"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api") as mock_core_v1,
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            # Mock replace to raise 404
+            mock_core_v1.return_value.replace_namespaced_config_map.side_effect = ApiException(
+                status=404
+            )
+            # Mock create to return the configmap
+            mock_core_v1.return_value.create_namespaced_config_map.return_value = mock_cm
+
+            k8s = K8sClient()
+            result = k8s.create_or_update_configmap(
+                name="test-cm",
+                namespace="default",
+                data={"key": "value"},
+            )
+
+            assert result == {"metadata": {"name": "test-cm"}}
+            mock_core_v1.return_value.replace_namespaced_config_map.assert_called_once()
+            mock_core_v1.return_value.create_namespaced_config_map.assert_called_once()
+
+    def test_update_configmap_if_exists(self) -> None:
+        """Test updating configmap if it exists."""
+        from kubernetes.config import ConfigException
+
+        mock_cm = MagicMock()
+        mock_cm.to_dict.return_value = {"metadata": {"name": "test-cm"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api") as mock_core_v1,
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            # Mock replace to succeed
+            mock_core_v1.return_value.replace_namespaced_config_map.return_value = mock_cm
+
+            k8s = K8sClient()
+            result = k8s.create_or_update_configmap(
+                name="test-cm",
+                namespace="default",
+                data={"key": "value"},
+            )
+
+            assert result == {"metadata": {"name": "test-cm"}}
+            mock_core_v1.return_value.replace_namespaced_config_map.assert_called_once()
+            mock_core_v1.return_value.create_namespaced_config_map.assert_not_called()
+
+    def test_create_configmap_with_owner_reference(self) -> None:
+        """Test creating configmap with owner reference."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        mock_cm = MagicMock()
+        mock_cm.to_dict.return_value = {"metadata": {"name": "test-cm"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api") as mock_core_v1,
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_core_v1.return_value.replace_namespaced_config_map.side_effect = ApiException(
+                status=404
+            )
+            mock_core_v1.return_value.create_namespaced_config_map.return_value = mock_cm
+
+            owner_ref = {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "name": "owner",
+                "uid": "123",
+            }
+
+            k8s = K8sClient()
+            k8s.create_or_update_configmap(
+                name="test-cm",
+                namespace="default",
+                data={"key": "value"},
+                owner_reference=owner_ref,
+            )
+
+            # Check if owner reference was added to metadata
+            call_args = mock_core_v1.return_value.create_namespaced_config_map.call_args
+            body = call_args[0][1]
+            assert len(body.metadata.owner_references) == 1
+            assert body.metadata.owner_references[0].name == "owner"
+            assert body.metadata.owner_references[0].uid == "123"
+
+    def test_create_configmap_raises_on_other_error(self) -> None:
+        """Test that other exceptions are raised."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api") as mock_core_v1,
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_core_v1.return_value.replace_namespaced_config_map.side_effect = ApiException(
+                status=500
+            )
+
+            k8s = K8sClient()
+            try:
+                k8s.create_or_update_configmap(
+                    name="test-cm",
+                    namespace="default",
+                    data={"key": "value"},
+                )
+                assert False, "Should have raised ApiException"
+            except ApiException as e:
+                assert e.status == 500
+
+
+class TestK8sClientCreateOrUpdateService:
+    """Tests for K8sClient.create_or_update_service."""
+
+    def test_create_service_if_not_exists(self) -> None:
+        """Test creating service if it doesn't exist."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        mock_svc = MagicMock()
+        mock_svc.to_dict.return_value = {"metadata": {"name": "test-svc"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api") as mock_core_v1,
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            # Mock read to return 404
+            mock_core_v1.return_value.read_namespaced_service.side_effect = ApiException(status=404)
+            # Mock create to return the service
+            mock_core_v1.return_value.create_namespaced_service.return_value = mock_svc
+
+            k8s = K8sClient()
+            result = k8s.create_or_update_service(
+                name="test-svc",
+                namespace="default",
+                ports=[{"port": 80, "targetPort": 8080}],
+                selector={"app": "test"},
+            )
+
+            assert result == {"metadata": {"name": "test-svc"}}
+            mock_core_v1.return_value.read_namespaced_service.assert_called_once()
+            mock_core_v1.return_value.create_namespaced_service.assert_called_once()
+            mock_core_v1.return_value.replace_namespaced_service.assert_not_called()
+
+    def test_update_service_if_exists(self) -> None:
+        """Test updating service if it exists."""
+        from kubernetes.config import ConfigException
+
+        mock_existing = MagicMock()
+        mock_existing.metadata.resource_version = "123"
+        mock_existing.spec.cluster_ip = "10.0.0.1"
+
+        mock_svc = MagicMock()
+        mock_svc.to_dict.return_value = {"metadata": {"name": "test-svc"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api") as mock_core_v1,
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            # Mock read to return existing
+            mock_core_v1.return_value.read_namespaced_service.return_value = mock_existing
+            # Mock replace to succeed
+            mock_core_v1.return_value.replace_namespaced_service.return_value = mock_svc
+
+            k8s = K8sClient()
+            result = k8s.create_or_update_service(
+                name="test-svc",
+                namespace="default",
+                ports=[{"port": 80, "targetPort": 8080}],
+                selector={"app": "test"},
+            )
+
+            assert result == {"metadata": {"name": "test-svc"}}
+            mock_core_v1.return_value.read_namespaced_service.assert_called_once()
+            mock_core_v1.return_value.replace_namespaced_service.assert_called_once()
+            mock_core_v1.return_value.create_namespaced_service.assert_not_called()
+
+            # Verify resource version and cluster IP were preserved
+            call_args = mock_core_v1.return_value.replace_namespaced_service.call_args
+            body = call_args[0][2]
+            assert body.metadata.resource_version == "123"
+            assert body.spec.cluster_ip == "10.0.0.1"
+
+    def test_create_service_with_owner_reference(self) -> None:
+        """Test creating service with owner reference."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        mock_svc = MagicMock()
+        mock_svc.to_dict.return_value = {"metadata": {"name": "test-svc"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api") as mock_core_v1,
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_core_v1.return_value.read_namespaced_service.side_effect = ApiException(status=404)
+            mock_core_v1.return_value.create_namespaced_service.return_value = mock_svc
+
+            owner_ref = {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "name": "owner",
+                "uid": "123",
+            }
+
+            k8s = K8sClient()
+            k8s.create_or_update_service(
+                name="test-svc",
+                namespace="default",
+                ports=[{"port": 80}],
+                selector={"app": "test"},
+                owner_reference=owner_ref,
+            )
+
+            # Check if owner reference was added to metadata
+            call_args = mock_core_v1.return_value.create_namespaced_service.call_args
+            body = call_args[0][1]
+            assert len(body.metadata.owner_references) == 1
+            assert body.metadata.owner_references[0].name == "owner"
+
+    def test_create_service_raises_on_other_error(self) -> None:
+        """Test that other exceptions are raised."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api") as mock_core_v1,
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_core_v1.return_value.read_namespaced_service.side_effect = ApiException(status=500)
+
+            k8s = K8sClient()
+            try:
+                k8s.create_or_update_service(
+                    name="test-svc",
+                    namespace="default",
+                    ports=[{"port": 80}],
+                    selector={"app": "test"},
+                )
+                assert False, "Should have raised ApiException"
+            except ApiException as e:
+                assert e.status == 500
