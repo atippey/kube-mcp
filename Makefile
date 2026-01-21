@@ -8,7 +8,7 @@
 # Image configuration
 IMAGE ?= mcp-operator
 TAG ?= latest
-REGISTRY ?= ""
+REGISTRY ?= ghcr.io/atippey
 
 # Default target
 help:
@@ -114,7 +114,7 @@ k3d-examples:
 	./scripts/k3d-cluster.sh examples
 
 k3d-build:
-	./scripts/k3d-cluster.sh build
+	REGISTRY=localhost:5000 IMAGE=$(IMAGE) TAG=$(TAG) ./scripts/k3d-cluster.sh build
 
 k3d-deploy:
 	./scripts/k3d-cluster.sh deploy
@@ -145,7 +145,7 @@ docker-build-multiarch:
 
 SAMPLE_IMAGE ?= mcp-echo-server
 SAMPLE_TAG ?= latest
-SAMPLE_REGISTRY ?= ghcr.io/atippey
+SAMPLE_REGISTRY ?= $(REGISTRY)
 
 sample-build:
 	docker build -t $(SAMPLE_IMAGE):$(SAMPLE_TAG) samples/echo-server/

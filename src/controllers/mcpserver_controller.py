@@ -255,7 +255,7 @@ async def reconcile_mcpserver(
                     "containers": [
                         {
                             "name": "server",
-                            "image": "ghcr.io/atippey/mcp-echo-server:latest",
+                            "image": server_spec.image,
                             "ports": [{"containerPort": 8080}],
                             "env": [
                                 {

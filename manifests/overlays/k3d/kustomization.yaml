@@ -8,8 +8,8 @@ resources:
 
 images:
   - name: mcp-operator
-    newName: ghcr.io/atippey/mcp-operator
-    newTag: dev
+    newName: mcp-operator-registry:5000/mcp-operator
+    newTag: latest
 
 patches:
   # Use lower resource limits for k3d

@@ -6,6 +6,11 @@ set -e
 CLUSTER_NAME="mcp-operator"
 CONFIG_FILE="k3d-config.yaml"
 
+# Image configuration
+REGISTRY=${REGISTRY:-localhost:5000}
+IMAGE=${IMAGE:-mcp-operator}
+TAG=${TAG:-latest}
+
 function create_cluster() {
     echo "Creating k3d cluster: ${CLUSTER_NAME}..."
     k3d cluster create --config ${CONFIG_FILE}
@@ -91,9 +96,11 @@ EOF
 }
 
 function build_and_push() {
-    echo "Building and pushing operator image to local registry..."
-    docker build -t localhost:5000/mcp-operator:latest .
-    docker push localhost:5000/mcp-operator:latest
+    echo "Building and pushing operator image to registry..."
+    FULL_IMAGE="${REGISTRY}/${IMAGE}:${TAG}"
+    echo "Target: ${FULL_IMAGE}"
+    docker build -t ${FULL_IMAGE} .
+    docker push ${FULL_IMAGE}
     echo "Image built and pushed successfully!"
 }
 

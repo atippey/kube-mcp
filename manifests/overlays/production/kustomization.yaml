@@ -9,7 +9,7 @@ resources:
 # Override with production image
 images:
   - name: mcp-operator
-    newName: ghcr.io/yourorg/mcp-operator
+    newName: ghcr.io/atippey/mcp-operator
     newTag: latest
 
 patches:
