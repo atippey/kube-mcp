@@ -457,12 +457,23 @@ class TestMCPServerReconciliation:
         assert deployment_body["spec"]["replicas"] == 2
         assert (
             deployment_body["spec"]["template"]["spec"]["containers"][0]["image"]
-            == "ghcr.io/atippey/mcp-server:latest"
+            == "ghcr.io/atippey/mcp-echo-server:latest"
         )
         assert (
             deployment_body["spec"]["template"]["spec"]["containers"][0]["env"][0]["value"]
             == "mcp-redis"
         )
+
+        # Verify ConfigMap volume mount
+        volumes = deployment_body["spec"]["template"]["spec"]["volumes"]
+        assert len(volumes) == 1
+        assert volumes[0]["name"] == "config"
+        assert volumes[0]["configMap"]["name"] == "mcp-server-test-server-config"
+
+        volume_mounts = deployment_body["spec"]["template"]["spec"]["containers"][0]["volumeMounts"]
+        assert len(volume_mounts) == 1
+        assert volume_mounts[0]["name"] == "config"
+        assert volume_mounts[0]["mountPath"] == "/etc/mcp/config"
 
         mock_adopt.assert_called_once_with(deployment_body)
 

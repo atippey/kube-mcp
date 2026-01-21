@@ -2,7 +2,8 @@
         k3d-create k3d-delete k3d-start k3d-stop k3d-status \
         k3d-crds k3d-redis k3d-examples k3d-build k3d-deploy \
         kustomize-dev kustomize-k3d kustomize-prod \
-        docker-build-multiarch
+        docker-build-multiarch \
+        sample-build sample-push sample-deploy
 
 # Image configuration
 IMAGE ?= mcp-operator
@@ -39,6 +40,11 @@ help:
 	@echo ""
 	@echo "Docker:"
 	@echo "  make docker-build-multiarch  Build and push multi-arch image (amd64, arm64)"
+	@echo ""
+	@echo "Sample Echo Server:"
+	@echo "  make sample-build   Build echo-server image locally"
+	@echo "  make sample-push    Build and push echo-server to registry"
+	@echo "  make sample-deploy  Deploy sample resources to cluster"
 	@echo ""
 	@echo "Kustomize:"
 	@echo "  make kustomize-dev   Apply dev overlay"
@@ -132,3 +138,22 @@ kustomize-prod:
 
 docker-build-multiarch:
 	./scripts/build_multiarch.sh $(IMAGE) $(TAG) $(REGISTRY)
+
+# =============================================================================
+# Sample Echo Server
+# =============================================================================
+
+SAMPLE_IMAGE ?= mcp-echo-server
+SAMPLE_TAG ?= latest
+SAMPLE_REGISTRY ?= ghcr.io/atippey
+
+sample-build:
+	docker build -t $(SAMPLE_IMAGE):$(SAMPLE_TAG) samples/echo-server/
+
+sample-push:
+	docker buildx build --platform linux/arm64,linux/amd64 \
+		-t $(SAMPLE_REGISTRY)/$(SAMPLE_IMAGE):$(SAMPLE_TAG) \
+		--push samples/echo-server/
+
+sample-deploy:
+	kubectl apply -k samples/echo-server/manifests/

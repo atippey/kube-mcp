@@ -196,7 +196,16 @@ class K8sClient:
         """
         metadata: dict[str, Any] = {"name": name, "namespace": namespace}
         if owner_reference:
-            metadata["ownerReferences"] = [owner_reference]
+            metadata["owner_references"] = [
+                client.V1OwnerReference(
+                    api_version=owner_reference.get("apiVersion"),
+                    kind=owner_reference.get("kind"),
+                    name=owner_reference.get("name"),
+                    uid=owner_reference.get("uid"),
+                    controller=owner_reference.get("controller", True),
+                    block_owner_deletion=owner_reference.get("blockOwnerDeletion", True),
+                )
+            ]
 
         body = client.V1ConfigMap(
             api_version="v1",
@@ -239,7 +248,16 @@ class K8sClient:
         """
         metadata: dict[str, Any] = {"name": name, "namespace": namespace}
         if owner_reference:
-            metadata["ownerReferences"] = [owner_reference]
+            metadata["owner_references"] = [
+                client.V1OwnerReference(
+                    api_version=owner_reference.get("apiVersion"),
+                    kind=owner_reference.get("kind"),
+                    name=owner_reference.get("name"),
+                    uid=owner_reference.get("uid"),
+                    controller=owner_reference.get("controller", True),
+                    block_owner_deletion=owner_reference.get("blockOwnerDeletion", True),
+                )
+            ]
 
         # Ensure ports are valid V1ServicePort objects
         service_ports = []
@@ -308,7 +326,16 @@ class K8sClient:
         """
         metadata: dict[str, Any] = {"name": name, "namespace": namespace}
         if owner_reference:
-            metadata["ownerReferences"] = [owner_reference]
+            metadata["owner_references"] = [
+                client.V1OwnerReference(
+                    api_version=owner_reference.get("apiVersion"),
+                    kind=owner_reference.get("kind"),
+                    name=owner_reference.get("name"),
+                    uid=owner_reference.get("uid"),
+                    controller=owner_reference.get("controller", True),
+                    block_owner_deletion=owner_reference.get("blockOwnerDeletion", True),
+                )
+            ]
 
         # Define Ingress Rule
         path_type = "Prefix"

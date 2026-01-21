@@ -255,16 +255,35 @@ async def reconcile_mcpserver(
                     "containers": [
                         {
                             "name": "server",
-                            "image": "ghcr.io/atippey/mcp-server:latest",
+                            "image": "ghcr.io/atippey/mcp-echo-server:latest",
                             "ports": [{"containerPort": 8080}],
                             "env": [
                                 {
                                     "name": "REDIS_HOST",
                                     "value": server_spec.redis.serviceName,
+                                },
+                                {
+                                    "name": "MCP_CONFIG_DIR",
+                                    "value": "/etc/mcp/config",
+                                },
+                            ],
+                            "volumeMounts": [
+                                {
+                                    "name": "config",
+                                    "mountPath": "/etc/mcp/config",
+                                    "readOnly": True,
                                 }
                             ],
                         }
-                    ]
+                    ],
+                    "volumes": [
+                        {
+                            "name": "config",
+                            "configMap": {
+                                "name": config_map_name,
+                            },
+                        }
+                    ],
                 },
             },
         },
