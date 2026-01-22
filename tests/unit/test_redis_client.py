@@ -1,8 +1,9 @@
 """Unit tests for Redis client utilities."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import redis
+
 from src.utils.redis_client import RedisClient
 
 
