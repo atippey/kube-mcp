@@ -23,6 +23,7 @@ ruff = "^0.1.0"
 mypy = "^1.7.0"
 types-redis = "^4.6.0"
 poethepoet = "^0.24.0"
+testcontainers = "^4.0"
 
 [build-system]
 requires = ["poetry-core"]
