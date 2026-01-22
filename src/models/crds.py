@@ -76,6 +76,7 @@ class MCPServerSpec(BaseModel):
     """MCPServer spec."""
 
     replicas: int = Field(default=1, ge=1, le=10)
+    image: str = Field(default="ghcr.io/atippey/mcp-echo-server:latest")
     redis: RedisConfig
     ingress: IngressConfig | None = None
     toolSelector: LabelSelector

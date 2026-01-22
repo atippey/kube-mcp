@@ -34,6 +34,10 @@ spec:
                   maximum: 10
                   default: 1
                   description: Number of MCP server replicas
+                image:
+                  type: string
+                  default: "ghcr.io/atippey/mcp-echo-server:latest"
+                  description: Image for the MCP server container
                 redis:
                   type: object
                   required:

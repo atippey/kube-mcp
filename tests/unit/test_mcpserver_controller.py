@@ -478,6 +478,43 @@ class TestMCPServerReconciliation:
         mock_adopt.assert_called_once_with(deployment_body)
 
     @pytest.mark.asyncio
+    async def test_reconcile_creates_deployment_with_custom_image(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        mock_adopt: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that reconciliation creates a deployment with custom image."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        # Set custom image
+        sample_mcpserver_spec["image"] = "custom/image:tag"
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        mock_k8s.create_or_update_deployment.assert_called_once()
+        call_args = mock_k8s.create_or_update_deployment.call_args
+        deployment_body = call_args[0][2]
+
+        assert (
+            deployment_body["spec"]["template"]["spec"]["containers"][0]["image"]
+            == "custom/image:tag"
+        )
+
+    @pytest.mark.asyncio
     async def test_reconcile_creates_service(
         self,
         sample_mcpserver_spec: dict[str, Any],
