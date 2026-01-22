@@ -1,0 +1,122 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mcpprompts.mcp.k8s.turd.ninja
+spec:
+  group: mcp.k8s.turd.ninja
+  names:
+    kind: MCPPrompt
+    listKind: MCPPromptList
+    plural: mcpprompts
+    singular: mcpprompt
+    shortNames:
+      - mcpp
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - name
+                - template
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 63
+                  pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+                  description: MCP prompt name (must be unique within server)
+                description:
+                  type: string
+                  maxLength: 500
+                  description: Human-readable description of the prompt
+                template:
+                  type: string
+                  minLength: 1
+                  maxLength: 10000
+                  description: Prompt template with {{variable}} placeholders
+                variables:
+                  type: array
+                  description: List of variables used in the template
+                  items:
+                    type: object
+                    required:
+                      - name
+                    properties:
+                      name:
+                        type: string
+                        minLength: 1
+                        maxLength: 63
+                        pattern: '^[a-zA-Z0-9_]+$'
+                        description: Variable name (alphanumeric and underscore only)
+                      description:
+                        type: string
+                        maxLength: 200
+                        description: Description of the variable
+                      required:
+                        type: boolean
+                        default: false
+                        description: Whether this variable is required
+                      default:
+                        type: string
+                        description: Default value for the variable
+                ingressPath:
+                  type: string
+                  pattern: '^/.*$'
+                  description: Optional path to expose prompt via HTTP GET
+            status:
+              type: object
+              properties:
+                validated:
+                  type: boolean
+                  description: Whether template and variables are valid
+                lastValidationTime:
+                  type: string
+                  format: date-time
+                  description: Last time validation was performed
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Prompt Name
+          type: string
+          jsonPath: .spec.name
+        - name: Variables
+          type: integer
+          jsonPath: .spec.variables.length
+        - name: Validated
+          type: boolean
+          jsonPath: .status.validated
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

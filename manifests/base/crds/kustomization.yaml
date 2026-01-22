@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - mcpserver-crd.yaml
+  - mcptool-crd.yaml
+  - mcpprompt-crd.yaml
+  - mcpresource-crd.yaml

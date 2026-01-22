@@ -1,0 +1,162 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mcpservers.mcp.k8s.turd.ninja
+spec:
+  group: mcp.k8s.turd.ninja
+  names:
+    kind: MCPServer
+    listKind: MCPServerList
+    plural: mcpservers
+    singular: mcpserver
+    shortNames:
+      - mcps
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - redis
+                - toolSelector
+              properties:
+                replicas:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  default: 1
+                  description: Number of MCP server replicas
+                redis:
+                  type: object
+                  required:
+                    - serviceName
+                  properties:
+                    serviceName:
+                      type: string
+                      minLength: 1
+                      maxLength: 253
+                      pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                      description: Name of the Redis service for state storage
+                ingress:
+                  type: object
+                  properties:
+                    host:
+                      type: string
+                      minLength: 1
+                      maxLength: 253
+                      description: Ingress hostname
+                    tlsSecretName:
+                      type: string
+                      minLength: 1
+                      maxLength: 253
+                      pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                      description: TLS secret name for HTTPS
+                    pathPrefix:
+                      type: string
+                      pattern: '^/[a-z0-9/-]*$'
+                      default: /mcp
+                      description: Base path prefix for all MCP endpoints
+                toolSelector:
+                  type: object
+                  description: Label selector for MCPTool, MCPPrompt, and MCPResource objects
+                  properties:
+                    matchLabels:
+                      type: object
+                      additionalProperties:
+                        type: string
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        required:
+                          - key
+                          - operator
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            type: string
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                          values:
+                            type: array
+                            items:
+                              type: string
+                config:
+                  type: object
+                  properties:
+                    requestTimeout:
+                      type: string
+                      pattern: '^[0-9]+(s|m|h)$'
+                      default: "30s"
+                      description: Request timeout duration
+                    maxConcurrentRequests:
+                      type: integer
+                      minimum: 1
+                      maximum: 10000
+                      default: 100
+                      description: Maximum concurrent requests per replica
+            status:
+              type: object
+              properties:
+                readyReplicas:
+                  type: integer
+                  description: Number of ready replicas
+                toolCount:
+                  type: integer
+                  description: Number of registered tools
+                promptCount:
+                  type: integer
+                  description: Number of registered prompts
+                resourceCount:
+                  type: integer
+                  description: Number of registered resources
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Replicas
+          type: integer
+          jsonPath: .spec.replicas
+        - name: Ready
+          type: integer
+          jsonPath: .status.readyReplicas
+        - name: Tools
+          type: integer
+          jsonPath: .status.toolCount
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

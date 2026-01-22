@@ -1,0 +1,137 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mcptools.mcp.k8s.turd.ninja
+spec:
+  group: mcp.k8s.turd.ninja
+  names:
+    kind: MCPTool
+    listKind: MCPToolList
+    plural: mcptools
+    singular: mcptool
+    shortNames:
+      - mcpt
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - name
+                - service
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 63
+                  pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+                  description: MCP tool name (must be unique within server)
+                description:
+                  type: string
+                  maxLength: 500
+                  description: Human-readable description of the tool
+                service:
+                  type: object
+                  required:
+                    - name
+                    - port
+                  properties:
+                    name:
+                      type: string
+                      minLength: 1
+                      maxLength: 253
+                      pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                      description: Kubernetes service name
+                    namespace:
+                      type: string
+                      minLength: 1
+                      maxLength: 63
+                      pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                      description: Service namespace (defaults to same as MCPTool)
+                    port:
+                      type: integer
+                      minimum: 1
+                      maximum: 65535
+                      description: Service port number
+                    path:
+                      type: string
+                      pattern: '^/.*$'
+                      default: /
+                      description: HTTP path for tool endpoint
+                inputSchema:
+                  type: object
+                  description: JSON Schema for tool input validation
+                  x-kubernetes-preserve-unknown-fields: true
+                method:
+                  type: string
+                  enum:
+                    - GET
+                    - POST
+                    - PUT
+                    - DELETE
+                    - PATCH
+                  default: POST
+                  description: HTTP method for tool invocation
+                ingressPath:
+                  type: string
+                  pattern: '^/.*$'
+                  description: Optional path to expose tool via ingress
+            status:
+              type: object
+              properties:
+                ready:
+                  type: boolean
+                  description: Whether tool is ready for use
+                resolvedEndpoint:
+                  type: string
+                  description: Fully resolved endpoint URL
+                lastSyncTime:
+                  type: string
+                  format: date-time
+                  description: Last time tool was synced
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Tool Name
+          type: string
+          jsonPath: .spec.name
+        - name: Service
+          type: string
+          jsonPath: .spec.service.name
+        - name: Ready
+          type: boolean
+          jsonPath: .status.ready
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
