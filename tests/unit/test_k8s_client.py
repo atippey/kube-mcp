@@ -106,13 +106,11 @@ class TestK8sClientGetService:
             patch("src.utils.k8s_client.client.NetworkingV1Api"),
             patch("src.utils.k8s_client.client.CustomObjectsApi"),
         ):
-            mock_core_v1.return_value.read_namespaced_service.side_effect = ApiException(
-                status=500
-            )
+            mock_core_v1.return_value.read_namespaced_service.side_effect = ApiException(status=500)
             k8s = K8sClient()
             try:
                 k8s.get_service("test-svc", "default")
-                assert False, "Should have raised ApiException"
+                raise AssertionError("Should have raised ApiException")
             except ApiException as e:
                 assert e.status == 500
 
@@ -242,7 +240,7 @@ class TestK8sClientGetDeployment:
             k8s = K8sClient()
             try:
                 k8s.get_deployment("test-deploy", "default")
-                assert False, "Should have raised ApiException"
+                raise AssertionError("Should have raised ApiException")
             except ApiException as e:
                 assert e.status == 500
 
@@ -339,7 +337,7 @@ class TestK8sClientCreateOrUpdateDeployment:
             k8s = K8sClient()
             try:
                 k8s.create_or_update_deployment("test-deploy", "default", mock_deployment)
-                assert False, "Should have raised ApiException"
+                raise AssertionError("Should have raised ApiException")
             except ApiException as e:
                 assert e.status == 500
 
@@ -507,11 +505,7 @@ class TestK8sClientBuildLabelSelectorString:
         ):
             k8s = K8sClient()
             result = k8s._build_label_selector_string(
-                {
-                    "matchExpressions": [
-                        {"key": "env", "operator": "NotIn", "values": ["prod"]}
-                    ]
-                }
+                {"matchExpressions": [{"key": "env", "operator": "NotIn", "values": ["prod"]}]}
             )
 
             assert "env notin (prod)" in result
@@ -802,7 +796,7 @@ class TestK8sClientCreateOrUpdateIngress:
                     service_name="test-svc",
                     service_port=80,
                 )
-                assert False, "Should have raised ApiException"
+                raise AssertionError("Should have raised ApiException")
             except ApiException as e:
                 assert e.status == 500
 
@@ -952,7 +946,7 @@ class TestK8sClientCreateOrUpdateConfigMap:
                     namespace="default",
                     data={"key": "value"},
                 )
-                assert False, "Should have raised ApiException"
+                raise AssertionError("Should have raised ApiException")
             except ApiException as e:
                 assert e.status == 500
 
@@ -1113,6 +1107,6 @@ class TestK8sClientCreateOrUpdateService:
                     ports=[{"port": 80}],
                     selector={"app": "test"},
                 )
-                assert False, "Should have raised ApiException"
+                raise AssertionError("Should have raised ApiException")
             except ApiException as e:
                 assert e.status == 500
