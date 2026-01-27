@@ -58,8 +58,9 @@ def _extract_template_variables(template: str) -> set[str]:
 
 
 @kopf.on.create("mcp.k8s.turd.ninja", "v1alpha1", "mcpprompts")
-@kopf.on.update("mcp.k8s.turd.ninja", "v1alpha1", "mcpprompts")
+@kopf.on.update("mcp.k8s.turd.ninja", "v1alpha1", "mcpprompts")  # type: ignore[arg-type]
 async def reconcile_mcpprompt(
+    *,
     spec: dict[str, Any],
     name: str,
     namespace: str,
@@ -137,8 +138,9 @@ async def reconcile_mcpprompt(
     ]
 
 
-@kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpprompts")
+@kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpprompts")  # type: ignore[arg-type]
 async def delete_mcpprompt(
+    *,
     name: str,
     namespace: str,
     logger: kopf.Logger,

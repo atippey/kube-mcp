@@ -44,8 +44,9 @@ def _create_condition(
 
 
 @kopf.on.create("mcp.k8s.turd.ninja", "v1alpha1", "mcptools")
-@kopf.on.update("mcp.k8s.turd.ninja", "v1alpha1", "mcptools")
+@kopf.on.update("mcp.k8s.turd.ninja", "v1alpha1", "mcptools")  # type: ignore[arg-type]
 async def reconcile_mcptool(
+    *,
     spec: dict[str, Any],
     name: str,
     namespace: str,
@@ -125,8 +126,9 @@ async def reconcile_mcptool(
     ]
 
 
-@kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcptools")
+@kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcptools")  # type: ignore[arg-type]
 async def delete_mcptool(
+    *,
     name: str,
     namespace: str,
     logger: kopf.Logger,

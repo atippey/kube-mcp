@@ -4,7 +4,7 @@ Provides a wrapper around the kubernetes client for common operations
 used by the MCP operator controllers.
 """
 
-from typing import Any
+from typing import Any, cast
 
 from kubernetes import client, config
 from kubernetes.client.exceptions import ApiException
@@ -40,7 +40,7 @@ class K8sClient:
         """
         try:
             svc = self.core_v1.read_namespaced_service(name, namespace)
-            return svc.to_dict()
+            return cast(dict[str, Any], svc.to_dict())
         except ApiException as e:
             if e.status == 404:
                 return None
@@ -75,7 +75,7 @@ class K8sClient:
         """
         try:
             deployment = self.apps_v1.read_namespaced_deployment(name, namespace)
-            return deployment.to_dict()
+            return cast(dict[str, Any], deployment.to_dict())
         except ApiException as e:
             if e.status == 404:
                 return None
@@ -105,7 +105,7 @@ class K8sClient:
             else:
                 raise
 
-        return result.to_dict()
+        return cast(dict[str, Any], result.to_dict())
 
     def list_by_label_selector(
         self,
@@ -138,7 +138,7 @@ class K8sClient:
                 plural=plural,
                 label_selector=selector_str,
             )
-            return result.get("items", [])
+            return cast(list[dict[str, Any]], result.get("items", []))
         except ApiException:
             return []
 
@@ -222,7 +222,7 @@ class K8sClient:
             else:
                 raise
 
-        return result.to_dict()  # type: ignore[no-any-return]
+        return cast(dict[str, Any], result.to_dict())
 
     def create_or_update_service(
         self,
@@ -296,7 +296,7 @@ class K8sClient:
             else:
                 raise
 
-        return result.to_dict()  # type: ignore[no-any-return]
+        return cast(dict[str, Any], result.to_dict())
 
     def create_or_update_ingress(
         self,
@@ -386,7 +386,7 @@ class K8sClient:
             else:
                 raise
 
-        return result.to_dict()
+        return cast(dict[str, Any], result.to_dict())
 
 
 # Module-level client instance (lazy initialization)

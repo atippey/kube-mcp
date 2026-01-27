@@ -68,8 +68,9 @@ def _selector_to_dict(selector: Any) -> dict[str, Any]:
 
 
 @kopf.on.create("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")
-@kopf.on.update("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")
+@kopf.on.update("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")  # type: ignore[arg-type]
 async def reconcile_mcpserver(
+    *,
     spec: dict[str, Any],
     name: str,
     namespace: str,
@@ -355,8 +356,9 @@ async def reconcile_mcpserver(
     patch.status["conditions"] = [condition]
 
 
-@kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")
+@kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")  # type: ignore[arg-type]
 async def delete_mcpserver(
+    *,
     name: str,
     namespace: str,
     logger: kopf.Logger,
