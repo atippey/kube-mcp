@@ -82,7 +82,7 @@ def setup_cluster(k3s_cluster, k8s_client):
 
     # Install CRDs
     crds_dir = root_dir / "manifests/base/crds"
-    for crd_file in crds_dir.glob("*.yaml"):
+    for crd_file in crds_dir.glob("*-crd.yaml"):
         # print(f"Applying {crd_file}")
         with contextlib.suppress(utils.FailToCreateError):
             utils.create_from_yaml(k8s_client, str(crd_file))
