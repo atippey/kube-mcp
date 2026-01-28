@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 from kubernetes import client, utils
 
 GROUP = "mcp.k8s.turd.ninja"
@@ -126,12 +127,45 @@ def test_echo_server_integration(operator, k8s_client):
     resources_manifest = root_dir / "samples/echo-server/manifests/example-resources.yaml"
     print(f"Applying {resources_manifest}")
     # Note: example-resources.yaml uses 'mcp-test' namespace.
-    with contextlib.suppress(utils.FailToCreateError):
-        utils.create_from_yaml(k8s_client, str(resources_manifest))
 
-    # 3. Wait for MCPServer 'echo' to be ready
+    # Parse YAML and create custom resources manually
+    with open(resources_manifest) as f:
+        docs = list(yaml.safe_load_all(f))
+
     api = client.CustomObjectsApi(k8s_client)
 
+    # Map kind to plural
+    plural_map = {
+        'MCPServer': 'mcpservers',
+        'MCPTool': 'mcptools',
+        'MCPPrompt': 'mcpprompts',
+        'MCPResource': 'mcpresources',
+    }
+
+    for doc in docs:
+        if not doc:
+            continue
+
+        kind = doc.get('kind')
+        if kind not in plural_map:
+            # Not a custom resource, use utils.create_from_yaml
+            continue
+
+        group, version = doc['apiVersion'].split('/')
+        metadata = doc['metadata']
+        resource_namespace = metadata['namespace']
+        plural = plural_map[kind]
+
+        with contextlib.suppress(client.exceptions.ApiException):
+            api.create_namespaced_custom_object(
+                group=group,
+                version=version,
+                namespace=resource_namespace,
+                plural=plural,
+                body=doc
+            )
+
+    # 3. Wait for MCPServer 'echo' to be ready
     print("Waiting for MCPServer 'echo' to be ready...")
 
     def check_status():
