@@ -27,6 +27,7 @@ help:
 	@echo "  make run          Run operator locally (kopf)"
 	@echo ""
 	@echo "k3d Cluster:"
+	@echo "  make setup-k3d    Install k3d (brew on Mac, curl on Linux/CI)"
 	@echo "  make k3d-create   Create k3d cluster"
 	@echo "  make k3d-delete   Delete k3d cluster"
 	@echo "  make k3d-start    Start k3d cluster"
@@ -86,8 +87,20 @@ run:
 	poetry run poe run
 
 # =============================================================================
-# k3d Cluster Management
+# k3d Setup & Cluster Management
 # =============================================================================
+
+# Install k3d - works on macOS (brew), Linux, and CI
+setup-k3d:
+	@if command -v k3d >/dev/null 2>&1; then \
+		echo "k3d already installed: $$(k3d version | head -1)"; \
+	elif command -v brew >/dev/null 2>&1; then \
+		echo "Installing k3d via Homebrew..."; \
+		brew install k3d; \
+	else \
+		echo "Installing k3d via install script..."; \
+		curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash; \
+	fi
 
 k3d-create:
 	./scripts/k3d-cluster.sh create
