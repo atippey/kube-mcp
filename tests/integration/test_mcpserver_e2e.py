@@ -110,7 +110,9 @@ def test_mcpserver_lifecycle(operator, k8s_client):
 
 
 @pytest.mark.integration
-@pytest.mark.skip(reason="Blocked by cgroup v2 configuration issue in k3s container - pods cannot start")
+@pytest.mark.skip(
+    reason="Blocked by cgroup v2 configuration issue in k3s container - pods cannot start"
+)
 def test_echo_server_integration(operator, k8s_client):
     """Deploy echo server and verify aggregation."""
     namespace = "mcp-test"
@@ -137,33 +139,29 @@ def test_echo_server_integration(operator, k8s_client):
 
     # Map kind to plural
     plural_map = {
-        'MCPServer': 'mcpservers',
-        'MCPTool': 'mcptools',
-        'MCPPrompt': 'mcpprompts',
-        'MCPResource': 'mcpresources',
+        "MCPServer": "mcpservers",
+        "MCPTool": "mcptools",
+        "MCPPrompt": "mcpprompts",
+        "MCPResource": "mcpresources",
     }
 
     for doc in docs:
         if not doc:
             continue
 
-        kind = doc.get('kind')
+        kind = doc.get("kind")
         if kind not in plural_map:
             # Not a custom resource, use utils.create_from_yaml
             continue
 
-        group, version = doc['apiVersion'].split('/')
-        metadata = doc['metadata']
-        resource_namespace = metadata['namespace']
+        group, version = doc["apiVersion"].split("/")
+        metadata = doc["metadata"]
+        resource_namespace = metadata["namespace"]
         plural = plural_map[kind]
 
         with contextlib.suppress(client.exceptions.ApiException):
             api.create_namespaced_custom_object(
-                group=group,
-                version=version,
-                namespace=resource_namespace,
-                plural=plural,
-                body=doc
+                group=group, version=version, namespace=resource_namespace, plural=plural, body=doc
             )
 
     # 3. Wait for MCPServer 'echo' to be ready
