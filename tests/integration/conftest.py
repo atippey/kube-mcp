@@ -10,7 +10,8 @@ from kubernetes import client, config, utils
 from testcontainers.k3s import K3SContainer
 
 # Define the image to use
-K3S_IMAGE = "rancher/k3s:v1.27.1-k3s1"
+# Using v1.28+ for better cgroup v2 support
+K3S_IMAGE = "rancher/k3s:v1.28.5-k3s1"
 
 
 @pytest.fixture(scope="session")
