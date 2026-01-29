@@ -110,9 +110,6 @@ def test_mcpserver_lifecycle(operator, k8s_client):
 
 
 @pytest.mark.integration
-@pytest.mark.skip(
-    reason="Blocked by cgroup v2 configuration issue in k3s container - pods cannot start"
-)
 def test_echo_server_integration(operator, k8s_client):
     """Deploy echo server and verify aggregation."""
     namespace = "mcp-test"
