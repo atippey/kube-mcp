@@ -10,7 +10,8 @@ from kubernetes import client, config, utils
 from testcontainers.k3s import K3SContainer
 
 # Define the image to use
-K3S_IMAGE = "rancher/k3s:v1.27.1-k3s1"
+# Using v1.28+ for better cgroup v2 support
+K3S_IMAGE = "rancher/k3s:v1.28.5-k3s1"
 
 
 @pytest.fixture(scope="session")
@@ -82,7 +83,7 @@ def setup_cluster(k3s_cluster, k8s_client):
 
     # Install CRDs
     crds_dir = root_dir / "manifests/base/crds"
-    for crd_file in crds_dir.glob("*.yaml"):
+    for crd_file in crds_dir.glob("*-crd.yaml"):
         # print(f"Applying {crd_file}")
         with contextlib.suppress(utils.FailToCreateError):
             utils.create_from_yaml(k8s_client, str(crd_file))

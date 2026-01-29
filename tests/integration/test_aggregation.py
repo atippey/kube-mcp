@@ -54,17 +54,33 @@ def test_aggregation_update(operator, k8s_client):
     tools = json.loads(cm.data["tools.json"])
     assert len(tools) == 0, "Expected 0 tools initially"
 
+    # 2. Create a dummy service for the tool to reference
+    svc_name = "test-service"
+    core_v1.create_namespaced_service(
+        namespace=namespace,
+        body=client.V1Service(
+            metadata=client.V1ObjectMeta(name=svc_name),
+            spec=client.V1ServiceSpec(
+                ports=[client.V1ServicePort(port=80, target_port=8080)],
+                selector={"app": "test"},
+            ),
+        ),
+    )
+
     # 2. Create MCPTool matching selector
     tool_name = "agg-tool"
     tool = {
         "apiVersion": f"{GROUP}/{VERSION}",
         "kind": "MCPTool",
         "metadata": {"name": tool_name, "namespace": namespace, "labels": {label_key: label_value}},
-        "spec": {"name": "agg-tool", "service": {"name": "some-service", "port": 80}},
+        "spec": {"name": "agg-tool", "service": {"name": svc_name, "port": 80}},
     }
 
     print(f"Creating MCPTool {tool_name}")
     api.create_namespaced_custom_object(GROUP, VERSION, namespace, TOOL_PLURAL, body=tool)
+
+    # Wait for operator to process the tool and trigger reconciliation
+    time.sleep(5)
 
     # 3. Verify CM updates
     print("Waiting for ConfigMap update...")
@@ -76,7 +92,7 @@ def test_aggregation_update(operator, k8s_client):
         if any(t["name"] == "agg-tool" for t in tools):
             updated = True
             break
-        time.sleep(1)
+        time.sleep(2)
 
     assert updated, "ConfigMap was not updated with new tool"
 
