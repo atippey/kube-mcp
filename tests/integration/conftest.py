@@ -1,30 +1,41 @@
 import contextlib
 import os
+import shutil
 import subprocess
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 import pytest
 from kubernetes import client, config, utils
-from testcontainers.k3s import K3SContainer
-
-# Define the image to use
-# Using v1.28+ for better cgroup v2 support
-K3S_IMAGE = "rancher/k3s:v1.28.5-k3s1"
 
 
 @pytest.fixture(scope="session")
-def k3s_cluster():
-    """Starts a K3s cluster using testcontainers."""
-    k3s = None
-    kube_config_path = None
-    try:
-        k3s = K3SContainer(image=K3S_IMAGE)
-        k3s.start()
+def k3d_cluster():
+    """Starts a k3d cluster for integration tests."""
+    if not shutil.which("k3d"):
+        pytest.skip("k3d not installed")
 
-        # Get kubeconfig content
-        kubeconfig_yaml = k3s.config_yaml()
+    name = f"mcp-test-{uuid.uuid4().hex[:8]}"
+    kube_config_path = None
+
+    try:
+        # Create cluster
+        subprocess.run(
+            ["k3d", "cluster", "create", name, "--no-lb", "--wait", "--timeout", "60s"],
+            check=True,
+            capture_output=True
+        )
+
+        # Get kubeconfig
+        result = subprocess.run(
+            ["k3d", "kubeconfig", "get", name],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        kubeconfig_yaml = result.stdout
 
         # Write to temp file
         with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".yaml") as f:
@@ -37,26 +48,31 @@ def k3s_cluster():
         # Load config for the python client in this process
         config.load_kube_config(config_file=kube_config_path)
 
-        yield k3s
+        yield name
 
-    except Exception as e:
-        pytest.skip(f"Could not start K3s container (Docker required): {e}")
+    except subprocess.CalledProcessError as e:
+        pytest.skip(f"Could not start k3d cluster: {e}")
     finally:
-        if k3s:
-            with contextlib.suppress(Exception):
-                k3s.stop()
+        # Teardown
+        if shutil.which("k3d"):
+            subprocess.run(
+                ["k3d", "cluster", "delete", name],
+                check=False,
+                capture_output=True
+            )
+
         if kube_config_path and os.path.exists(kube_config_path):
             os.remove(kube_config_path)
 
 
 @pytest.fixture(scope="session")
-def k8s_client(k3s_cluster):
+def k8s_client(k3d_cluster):
     """Returns a configured Kubernetes client."""
     return client.ApiClient()
 
 
 @pytest.fixture(scope="session")
-def setup_cluster(k3s_cluster, k8s_client):
+def setup_cluster(k3d_cluster, k8s_client):
     """Installs CRDs and base dependencies (Redis)."""
     k8s_api = client.CoreV1Api(k8s_client)
 

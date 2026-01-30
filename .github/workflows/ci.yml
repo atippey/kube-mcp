@@ -154,6 +154,9 @@ jobs:
       - name: Install project
         run: poetry install --no-interaction
 
+      - name: Install k3d
+        run: make setup-k3d
+
       - name: Run integration tests
         run: poetry run pytest tests/integration/ -v --no-cov
         timeout-minutes: 10
