@@ -25,15 +25,12 @@ def k3d_cluster():
         subprocess.run(
             ["k3d", "cluster", "create", name, "--no-lb", "--wait", "--timeout", "60s"],
             check=True,
-            capture_output=True
+            capture_output=True,
         )
 
         # Get kubeconfig
         result = subprocess.run(
-            ["k3d", "kubeconfig", "get", name],
-            check=True,
-            capture_output=True,
-            text=True
+            ["k3d", "kubeconfig", "get", name], check=True, capture_output=True, text=True
         )
         kubeconfig_yaml = result.stdout
 
@@ -55,11 +52,7 @@ def k3d_cluster():
     finally:
         # Teardown
         if shutil.which("k3d"):
-            subprocess.run(
-                ["k3d", "cluster", "delete", name],
-                check=False,
-                capture_output=True
-            )
+            subprocess.run(["k3d", "cluster", "delete", name], check=False, capture_output=True)
 
         if kube_config_path and os.path.exists(kube_config_path):
             os.remove(kube_config_path)
