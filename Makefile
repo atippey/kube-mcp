@@ -148,12 +148,12 @@ SAMPLE_TAG ?= latest
 SAMPLE_REGISTRY ?= $(REGISTRY)
 
 sample-build:
-	docker build -t $(SAMPLE_IMAGE):$(SAMPLE_TAG) samples/echo-server/
+	docker build -t $(SAMPLE_IMAGE):$(SAMPLE_TAG) examples/echo-server/
 
 sample-push:
 	docker buildx build --platform linux/arm64,linux/amd64 \
 		-t $(SAMPLE_REGISTRY)/$(SAMPLE_IMAGE):$(SAMPLE_TAG) \
-		--push samples/echo-server/
+		--push examples/echo-server/
 
 sample-deploy:
-	kubectl apply -k samples/echo-server/manifests/
+	kubectl apply -k examples/echo-server/manifests/

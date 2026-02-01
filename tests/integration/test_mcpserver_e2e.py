@@ -115,7 +115,7 @@ def test_echo_server_integration(operator, k8s_client):
 
     # 1. Deploy Echo Backend
     root_dir = Path(__file__).parents[2]
-    backend_manifest = root_dir / "samples/echo-server/manifests/echo-backend.yaml"
+    backend_manifest = root_dir / "examples/echo-server/manifests/echo-backend.yaml"
 
     print(f"Applying {backend_manifest}")
     # Note: echo-backend.yaml uses 'mcp-test' namespace.
@@ -123,7 +123,7 @@ def test_echo_server_integration(operator, k8s_client):
         utils.create_from_yaml(k8s_client, str(backend_manifest))
 
     # 2. Deploy Example Resources
-    resources_manifest = root_dir / "samples/echo-server/manifests/example-resources.yaml"
+    resources_manifest = root_dir / "examples/echo-server/manifests/example-resources.yaml"
     print(f"Applying {resources_manifest}")
     # Note: example-resources.yaml uses 'mcp-test' namespace.
     with contextlib.suppress(utils.FailToCreateError):

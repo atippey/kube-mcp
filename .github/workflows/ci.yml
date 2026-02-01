@@ -190,7 +190,7 @@ jobs:
       - name: Build echo-server image
         uses: docker/build-push-action@v5
         with:
-          context: ./samples/echo-server
+          context: ./examples/echo-server
           push: false
           tags: mcp-echo-server:${{ github.sha }}
           cache-from: type=gha
