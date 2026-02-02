@@ -151,7 +151,7 @@ func explainResource(resource string, recursive bool, maxDepth int) ExplainRespo
 	// Navigate to the requested field path
 	currentSchema := schema
 	for _, field := range fieldPath {
-		currentSchema = navigateToField(currentSchema, field)
+		currentSchema = navigateToField(currentSchema, field, models)
 		if currentSchema == nil {
 			return ExplainResponse{Resource: resource, Error: fmt.Sprintf("unknown field: %s", strings.Join(fieldPath, "."))}
 		}
@@ -191,10 +191,13 @@ func findSchemaForKind(models proto.Models, kind string) proto.Schema {
 	return nil
 }
 
-func navigateToField(schema proto.Schema, fieldName string) proto.Schema {
+func navigateToField(schema proto.Schema, fieldName string, models proto.Models) proto.Schema {
 	if schema == nil {
 		return nil
 	}
+
+	// Resolve references first
+	schema = resolveSchema(schema, models)
 
 	// Handle Kind (object with fields)
 	if kind, ok := schema.(*proto.Kind); ok {
@@ -213,7 +216,7 @@ func navigateToField(schema proto.Schema, fieldName string) proto.Schema {
 	// Handle Array
 	if arr, ok := schema.(*proto.Array); ok {
 		// If accessing array, navigate into element type
-		return navigateToField(arr.SubType, fieldName)
+		return navigateToField(arr.SubType, fieldName, models)
 	}
 
 	return nil

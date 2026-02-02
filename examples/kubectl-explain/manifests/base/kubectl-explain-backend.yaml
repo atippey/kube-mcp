@@ -1,0 +1,109 @@
+# kubectl-explain backend service
+# Provides a /explain endpoint that returns Kubernetes resource schema info
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubectl-explain
+  namespace: mcp-test
+---
+# ClusterRole to read OpenAPI/discovery endpoints
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubectl-explain-reader
+rules:
+  # Required for discovery client to fetch OpenAPI schema
+  - nonResourceURLs:
+      - /openapi
+      - /openapi/*
+      - /openapi/v2
+      - /openapi/v3
+      - /openapi/v3/*
+    verbs:
+      - get
+  # Required for API discovery
+  - apiGroups: [""]
+    resources:
+      - ""
+    verbs:
+      - get
+  - nonResourceURLs:
+      - /api
+      - /api/*
+      - /apis
+      - /apis/*
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubectl-explain-reader
+subjects:
+  - kind: ServiceAccount
+    name: kubectl-explain
+    namespace: mcp-test
+roleRef:
+  kind: ClusterRole
+  name: kubectl-explain-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubectl-explain
+  namespace: mcp-test
+  labels:
+    app.kubernetes.io/name: kubectl-explain
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kubectl-explain
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubectl-explain
+    spec:
+      serviceAccountName: kubectl-explain
+      containers:
+        - name: kubectl-explain
+          image: ghcr.io/atippey/kubectl-explain:latest
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubectl-explain-svc
+  namespace: mcp-test
+  labels:
+    app.kubernetes.io/name: kubectl-explain
+spec:
+  selector:
+    app.kubernetes.io/name: kubectl-explain
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

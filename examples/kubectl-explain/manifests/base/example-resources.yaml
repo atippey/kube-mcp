@@ -1,0 +1,55 @@
+# MCP resources for kubectl-explain tool
+# The MCPTool uses label "mcp-server: kubectl-explain" for selection
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPServer
+metadata:
+  name: kubectl-explain
+  namespace: mcp-test
+spec:
+  replicas: 1
+  redis:
+    serviceName: mcp-redis
+  toolSelector:
+    matchLabels:
+      mcp-server: kubectl-explain
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPTool
+metadata:
+  name: kubectl-explain-tool
+  namespace: mcp-test
+  labels:
+    mcp-server: kubectl-explain
+spec:
+  name: kubectl-explain
+  description: |
+    Get documentation for Kubernetes resource fields.
+    Returns field names, types, descriptions, and required status.
+    Supports dot notation like "pod.spec.containers" to drill into nested fields.
+    Use recursive=true to expand all nested fields.
+  service:
+    name: kubectl-explain-svc
+    port: 8080
+    path: /explain
+  inputSchema:
+    type: object
+    properties:
+      resource:
+        type: string
+        description: |
+          Resource path to explain. Examples:
+          - "pod" - top-level Pod fields
+          - "deployment.spec" - Deployment spec fields
+          - "pod.spec.containers" - Container fields within Pod spec
+      recursive:
+        type: boolean
+        description: If true, expand all nested object fields
+        default: false
+      maxDepth:
+        type: integer
+        description: Maximum recursion depth (default 5)
+        default: 5
+    required:
+      - resource
+  method: POST
