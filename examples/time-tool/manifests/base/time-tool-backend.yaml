@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: time-tool
+  namespace: mcp-test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: time-tool
+  namespace: mcp-test
+  labels:
+    app.kubernetes.io/name: time-tool
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: time-tool
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: time-tool
+    spec:
+      serviceAccountName: time-tool
+      containers:
+        - name: time-tool
+          image: ghcr.io/atippey/time-tool:latest
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: time-tool-svc
+  namespace: mcp-test
+  labels:
+    app.kubernetes.io/name: time-tool
+spec:
+  selector:
+    app.kubernetes.io/name: time-tool
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

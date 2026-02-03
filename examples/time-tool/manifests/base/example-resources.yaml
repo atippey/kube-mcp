@@ -1,0 +1,49 @@
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPServer
+metadata:
+  name: time-tool
+  namespace: mcp-test
+spec:
+  replicas: 1
+  redis:
+    serviceName: mcp-redis
+  toolSelector:
+    matchLabels:
+      mcp-server: time-tool
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPTool
+metadata:
+  name: time-tool-tool
+  namespace: mcp-test
+  labels:
+    mcp-server: time-tool
+spec:
+  name: time-tool
+  description: |
+    Returns the current time in a specified timezone and format.
+    Useful for checking checking world clocks, debugging timezone issues, or getting timestamps.
+  service:
+    name: time-tool-svc
+    port: 8080
+    path: /time
+  inputSchema:
+    type: object
+    properties:
+      timezone:
+        type: string
+        description: |
+          Timezone to return the time in (e.g., "America/New_York", "UTC", "Europe/London").
+          Defaults to "UTC".
+        default: "UTC"
+      format:
+        type: string
+        description: |
+          Format of the returned time.
+          Options:
+          - "rfc3339" (default): e.g., "2024-01-30T15:04:05-05:00"
+          - "unix": Unix timestamp
+          - "human": Human-readable format (e.g., "2006-01-02 15:04:05 MST")
+        default: "rfc3339"
+    required: []
+  method: POST
