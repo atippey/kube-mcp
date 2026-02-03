@@ -154,6 +154,9 @@ jobs:
       - name: Install project
         run: poetry install --no-interaction
 
+      - name: Install k3d
+        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
       - name: Run integration tests
         run: poetry run pytest tests/integration/ -v --no-cov
         timeout-minutes: 10
