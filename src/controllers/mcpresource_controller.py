@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import kopf
+from kubernetes import client
 
 from src.models.crds import MCPResourceSpec
 from src.utils.k8s_client import get_k8s_client
@@ -191,4 +192,52 @@ async def delete_mcpresource(
         **_: Additional kwargs from kopf.
     """
     logger.info(f"Deleting MCPResource {namespace}/{name}")
-    # TODO: Trigger MCPServer reconciliation to remove resource
+    await _trigger_mcpserver_reconciliation(namespace, logger)
+
+
+async def _trigger_mcpserver_reconciliation(namespace: str, logger: kopf.Logger) -> None:
+    """Trigger MCPServer reconciliation when tools/prompts/resources change.
+
+    Args:
+        namespace: The namespace to search for MCPServers.
+        logger: The kopf logger.
+    """
+    k8s = get_k8s_client()
+
+    # Find all MCPServers in this namespace
+    servers = k8s.list_by_label_selector(
+        group="mcp.k8s.turd.ninja",
+        version="v1alpha1",
+        plural="mcpservers",
+        namespace=namespace,
+        label_selector={},  # Get all servers
+    )
+
+    if not servers:
+        return
+
+    # Patch each server to trigger reconciliation
+    api = client.CustomObjectsApi()
+    for server in servers:
+        server_name = server["metadata"]["name"]
+        try:
+            # Touch the server's metadata to trigger reconcile
+            patch = {
+                "metadata": {
+                    "annotations": {
+                        "mcp.k8s.turd.ninja/last-child-update": datetime.now(UTC).isoformat()
+                    }
+                }
+            }
+
+            api.patch_namespaced_custom_object(
+                group="mcp.k8s.turd.ninja",
+                version="v1alpha1",
+                namespace=namespace,
+                plural="mcpservers",
+                name=server_name,
+                body=patch,
+            )
+            logger.info(f"Triggered reconciliation for MCPServer {namespace}/{server_name}")
+        except Exception as e:
+            logger.warning(f"Failed to trigger reconciliation for {server_name}: {e}")
