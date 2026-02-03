@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+images:
+  - name: ghcr.io/atippey/kubectl-explain
+    newName: mcp-operator-registry:5000/kubectl-explain
+    newTag: latest

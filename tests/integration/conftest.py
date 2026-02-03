@@ -32,11 +32,10 @@ def k3d_cluster():
         result = subprocess.run(
             ["k3d", "kubeconfig", "get", name], check=True, capture_output=True, text=True
         )
-        kubeconfig_yaml = result.stdout
 
         # Write to temp file
         with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".yaml") as f:
-            f.write(kubeconfig_yaml)
+            f.write(result.stdout)
             kube_config_path = f.name
 
         # Set KUBECONFIG environment variable for subprocesses (operator)

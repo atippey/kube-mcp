@@ -91,7 +91,7 @@ jobs:
       - name: Build and push echo-server image
         uses: docker/build-push-action@v5
         with:
-          context: ./samples/echo-server
+          context: ./examples/echo-server
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
