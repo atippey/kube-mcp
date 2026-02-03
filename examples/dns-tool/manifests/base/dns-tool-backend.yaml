@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dns-tool
+  namespace: mcp-test
+  labels:
+    app.kubernetes.io/name: dns-tool
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dns-tool
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dns-tool
+    spec:
+      containers:
+        - name: dns-tool
+          image: ghcr.io/atippey/dns-tool:latest
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dns-tool-svc
+  namespace: mcp-test
+  labels:
+    app.kubernetes.io/name: dns-tool
+spec:
+  selector:
+    app.kubernetes.io/name: dns-tool
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
