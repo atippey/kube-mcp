@@ -1,5 +1,6 @@
 import contextlib
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -9,66 +10,51 @@ from pathlib import Path
 import pytest
 from kubernetes import client, config, utils
 
-CLUSTER_NAME_PREFIX = "mcp-test"
-
 
 @pytest.fixture(scope="session")
 def k3d_cluster():
-    """Creates a k3d cluster for integration tests."""
-    cluster_name = f"{CLUSTER_NAME_PREFIX}-{uuid.uuid4().hex[:8]}"
-    kubeconfig_path = None
+    """Starts a k3d cluster for integration tests."""
+    if not shutil.which("k3d"):
+        pytest.skip("k3d not installed")
+
+    name = f"mcp-test-{uuid.uuid4().hex[:8]}"
+    kube_config_path = None
 
     try:
-        # Create cluster (no loadbalancer needed for tests)
+        # Create cluster
         subprocess.run(
-            [
-                "k3d",
-                "cluster",
-                "create",
-                cluster_name,
-                "--no-lb",
-                "--wait",
-                "--timeout",
-                "60s",
-            ],
+            ["k3d", "cluster", "create", name, "--no-lb", "--wait", "--timeout", "60s"],
             check=True,
             capture_output=True,
         )
 
         # Get kubeconfig
         result = subprocess.run(
-            ["k3d", "kubeconfig", "get", cluster_name],
-            check=True,
-            capture_output=True,
-            text=True,
+            ["k3d", "kubeconfig", "get", name], check=True, capture_output=True, text=True
         )
 
         # Write to temp file
         with tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".yaml") as f:
             f.write(result.stdout)
-            kubeconfig_path = f.name
+            kube_config_path = f.name
 
         # Set KUBECONFIG environment variable for subprocesses (operator)
-        os.environ["KUBECONFIG"] = kubeconfig_path
+        os.environ["KUBECONFIG"] = kube_config_path
 
         # Load config for the python client in this process
-        config.load_kube_config(config_file=kubeconfig_path)
+        config.load_kube_config(config_file=kube_config_path)
 
-        yield cluster_name
+        yield name
 
-    except FileNotFoundError:
-        pytest.skip("k3d not installed")
     except subprocess.CalledProcessError as e:
-        pytest.skip(f"Failed to create k3d cluster: {e.stderr}")
+        pytest.skip(f"Could not start k3d cluster: {e}")
     finally:
-        # Cleanup cluster
-        with contextlib.suppress(Exception):
-            subprocess.run(
-                ["k3d", "cluster", "delete", cluster_name],
-                capture_output=True,
-            )
-        if kubeconfig_path and os.path.exists(kubeconfig_path):
-            os.remove(kubeconfig_path)
+        # Teardown
+        if shutil.which("k3d"):
+            subprocess.run(["k3d", "cluster", "delete", name], check=False, capture_output=True)
+
+        if kube_config_path and os.path.exists(kube_config_path):
+            os.remove(kube_config_path)
 
 
 @pytest.fixture(scope="session")
@@ -105,7 +91,7 @@ def setup_cluster(k3d_cluster, k8s_client):
 
     # Install CRDs
     crds_dir = root_dir / "manifests/base/crds"
-    for crd_file in crds_dir.glob("*.yaml"):
+    for crd_file in crds_dir.glob("*-crd.yaml"):
         # print(f"Applying {crd_file}")
         with contextlib.suppress(utils.FailToCreateError):
             utils.create_from_yaml(k8s_client, str(crd_file))

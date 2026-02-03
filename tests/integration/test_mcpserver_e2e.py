@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 from kubernetes import client, utils
 
 GROUP = "mcp.k8s.turd.ninja"
@@ -126,25 +127,56 @@ def test_echo_server_integration(operator, k8s_client):
     resources_manifest = root_dir / "examples/echo-server/manifests/example-resources.yaml"
     print(f"Applying {resources_manifest}")
     # Note: example-resources.yaml uses 'mcp-test' namespace.
-    with contextlib.suppress(utils.FailToCreateError):
-        utils.create_from_yaml(k8s_client, str(resources_manifest))
 
-    # 3. Wait for MCPServer 'echo' to be ready
+    # Parse YAML and create custom resources manually
+    with open(resources_manifest) as f:
+        docs = list(yaml.safe_load_all(f))
+
     api = client.CustomObjectsApi(k8s_client)
 
-    print("Waiting for MCPServer 'echo' to be ready...")
+    # Map kind to plural
+    plural_map = {
+        "MCPServer": "mcpservers",
+        "MCPTool": "mcptools",
+        "MCPPrompt": "mcpprompts",
+        "MCPResource": "mcpresources",
+    }
 
-    def check_status():
+    for doc in docs:
+        if not doc:
+            continue
+
+        kind = doc.get("kind")
+        if kind not in plural_map:
+            # Not a custom resource, use utils.create_from_yaml
+            continue
+
+        group, version = doc["apiVersion"].split("/")
+        metadata = doc["metadata"]
+        resource_namespace = metadata["namespace"]
+        plural = plural_map[kind]
+
+        with contextlib.suppress(client.exceptions.ApiException):
+            api.create_namespaced_custom_object(
+                group=group, version=version, namespace=resource_namespace, plural=plural, body=doc
+            )
+
+    # 3. Wait for Deployment to be ready
+    # Note: We check deployment directly because MCPServer status may lag behind
+    # due to the controller not watching deployment status changes
+    print("Waiting for deployment 'mcp-server-echo' to be ready...")
+    apps_v1 = client.AppsV1Api(k8s_client)
+
+    def check_deployment_ready():
         try:
-            obj = api.get_namespaced_custom_object(GROUP, VERSION, namespace, PLURAL, "echo")
-            status = obj.get("status", {})
-            conditions = status.get("conditions", [])
-            return any(c["type"] == "Ready" and c["status"] == "True" for c in conditions)
+            deploy = apps_v1.read_namespaced_deployment("mcp-server-echo", namespace)
+            ready_replicas = deploy.status.ready_replicas or 0
+            return ready_replicas >= 1
         except client.exceptions.ApiException:
             return False
 
     # Increase timeout because image pull might be slow
-    ready = wait_for_resource(check_status, timeout=120)
+    ready = wait_for_resource(check_deployment_ready, timeout=120)
 
     if not ready:
         # Debug info
@@ -152,10 +184,10 @@ def test_echo_server_integration(operator, k8s_client):
             obj = api.get_namespaced_custom_object(GROUP, VERSION, namespace, PLURAL, "echo")
             print(f"MCPServer status: {obj.get('status')}")
 
-            apps_v1 = client.AppsV1Api(k8s_client)
             deploy = apps_v1.read_namespaced_deployment("mcp-server-echo", namespace)
             print(f"Deployment status: {deploy.status}")
-        pytest.fail("Echo MCPServer did not become ready")
+
+        pytest.fail("Deployment mcp-server-echo did not become ready")
 
     # 4. Verify Aggregation in ConfigMap
     print("Verifying ConfigMap content...")
