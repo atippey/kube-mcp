@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: ghcr.io/atippey/hash-tool
+    newName: mcp-operator-registry:5000/hash-tool
+    newTag: latest
