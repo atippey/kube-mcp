@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.controllers.mcpresource_controller import reconcile_mcpresource
+from src.controllers.mcpresource_controller import delete_mcpresource, reconcile_mcpresource
 from src.models.crds import MCPResourceSpec
 
 
@@ -368,3 +368,52 @@ class TestMCPResourceReconciliation:
         # Service lookup should use explicit namespace
         mock_k8s.get_service.assert_called_with("data-svc", "data-ns")
         assert mock_patch_obj.status["ready"] is True
+
+
+class TestMCPResourceDeletion:
+    """Tests for MCPResource deletion logic."""
+
+    @pytest.fixture
+    def mock_logger(self) -> MagicMock:
+        """Create a mock logger."""
+        return MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_delete_triggers_reconciliation(
+        self,
+        mock_logger: MagicMock,
+    ) -> None:
+        """Test that deletion triggers MCPServer reconciliation."""
+        mock_k8s = MagicMock()
+        # Mock list_by_label_selector to return some servers
+        mock_k8s.list_by_label_selector.return_value = [
+            {"metadata": {"name": "server1"}},
+            {"metadata": {"name": "server2"}},
+        ]
+
+        mock_custom_api = MagicMock()
+
+        with patch(
+            "src.controllers.mcpresource_controller.get_k8s_client", return_value=mock_k8s
+        ), patch("kubernetes.client.CustomObjectsApi", return_value=mock_custom_api):
+            await delete_mcpresource(
+                name="test-resource",
+                namespace="default",
+                logger=mock_logger,
+            )
+
+            # Verify servers were listed
+            mock_k8s.list_by_label_selector.assert_called_with(
+                group="mcp.k8s.turd.ninja",
+                version="v1alpha1",
+                plural="mcpservers",
+                namespace="default",
+                label_selector={},
+            )
+
+            # Verify patch was called for each server
+            assert mock_custom_api.patch_namespaced_custom_object.call_count == 2
+            # Check calls
+            calls = mock_custom_api.patch_namespaced_custom_object.call_args_list
+            assert calls[0].kwargs["name"] == "server1"
+            assert calls[1].kwargs["name"] == "server2"
