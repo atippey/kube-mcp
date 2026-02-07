@@ -4,4 +4,4 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - dns-tool-backend.yaml
-  - dns-tool-resources.yaml
+  - example-resources.yaml
