@@ -1,3 +1,3 @@
-module github.com/mcp-operator/examples/hash-tool
+module github.com/atippey/kube-mcp/examples/hash-tool
 
-go 1.24.3
+go 1.22
