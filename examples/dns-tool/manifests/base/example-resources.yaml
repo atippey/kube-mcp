@@ -1,0 +1,45 @@
+# MCP resources for dns-tool
+# The MCPTool uses label "mcp-server: dns-tool" for selection
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPServer
+metadata:
+  name: dns-tool
+  namespace: mcp-test
+spec:
+  replicas: 1
+  redis:
+    serviceName: mcp-redis
+  toolSelector:
+    matchLabels:
+      mcp-server: dns-tool
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPTool
+metadata:
+  name: dns-tool-tool
+  namespace: mcp-test
+  labels:
+    mcp-server: dns-tool
+spec:
+  name: dns-tool
+  description: |
+    Perform DNS lookups for hostnames.
+    Supports A, AAAA, MX, TXT, and CNAME record types.
+  service:
+    name: dns-tool-svc
+    port: 8080
+    path: /lookup
+  inputSchema:
+    type: object
+    properties:
+      hostname:
+        type: string
+        description: "Hostname to look up"
+      type:
+        type: string
+        description: "Record type (A, AAAA, MX, TXT, CNAME)"
+        default: "A"
+    required:
+      - hostname
+  method: POST
