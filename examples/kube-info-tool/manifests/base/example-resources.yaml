@@ -1,0 +1,55 @@
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPServer
+metadata:
+  name: kube-info-tool
+  namespace: mcp-test
+spec:
+  replicas: 1
+  redis:
+    serviceName: mcp-redis
+  toolSelector:
+    matchLabels:
+      mcp-server: kube-info-tool
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPTool
+metadata:
+  name: kube-info-namespaces
+  namespace: mcp-test
+  labels:
+    mcp-server: kube-info-tool
+spec:
+  name: list-namespaces
+  description: |
+    Lists all Kubernetes namespaces in the cluster with their current status.
+  service:
+    name: kube-info-tool-svc
+    port: 8080
+    path: /namespaces
+  inputSchema:
+    type: object
+    properties: {}
+  method: POST
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPTool
+metadata:
+  name: kube-info-pods
+  namespace: mcp-test
+  labels:
+    mcp-server: kube-info-tool
+spec:
+  name: list-pods
+  description: |
+    Lists pods in a given Kubernetes namespace with name, status, and node placement.
+  service:
+    name: kube-info-tool-svc
+    port: 8080
+    path: /pods
+  inputSchema:
+    type: object
+    properties:
+      namespace:
+        type: string
+        description: "Kubernetes namespace to list pods from (defaults to 'default')"
+  method: POST

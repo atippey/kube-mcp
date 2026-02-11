@@ -218,6 +218,7 @@ kind: ClusterRole
 metadata:
   name: ${NAME}-reader
 rules:
+  # TODO: Update resources and verbs for your tool's needs
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list"]
@@ -388,12 +389,15 @@ spec:
     path: ${ENDPOINT}
   inputSchema:
     type: object
-    properties:
-      input:
-        type: string
-        description: "TODO: describe this field"
-    required:
-      - input
+    properties: {}
+    # TODO: Define your tool's input properties and required fields
+    # Example:
+    #   properties:
+    #     input:
+    #       type: string
+    #       description: "Describe this field"
+    #   required:
+    #     - input
   method: POST
 RESEOF
 
