@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weather-tool
+  namespace: mcp-test
+  labels:
+    app.kubernetes.io/name: weather-tool
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: weather-tool
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: weather-tool
+    spec:
+      containers:
+        - name: weather-tool
+          image: ghcr.io/atippey/weather-tool:latest
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weather-tool-svc
+  namespace: mcp-test
+  labels:
+    app.kubernetes.io/name: weather-tool
+spec:
+  selector:
+    app.kubernetes.io/name: weather-tool
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
