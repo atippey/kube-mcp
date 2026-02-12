@@ -66,3 +66,10 @@ dist/
 kubeconfig
 *.kubeconfig
 .mcp.json
+
+# Go Examples
+examples/*/weather-tool
+examples/*/dns-tool
+examples/*/hash-tool
+examples/*/time-tool
+examples/*/crane-tool
