@@ -13,6 +13,8 @@ kubernetes = "^28.0.0"
 redis = "^5.0.0"
 pydantic = "^2.0.0"
 jinja2 = "^3.1.0"
+prometheus-client = "^0.24.0"
+python-json-logger = "^4.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"
@@ -117,4 +119,12 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "kubernetes.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["prometheus_client", "prometheus_client.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pythonjsonlogger", "pythonjsonlogger.*"]
 ignore_missing_imports = true

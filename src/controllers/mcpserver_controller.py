@@ -15,6 +15,7 @@ import kopf
 
 from src.models.crds import MCPServerSpec
 from src.utils.k8s_client import get_k8s_client
+from src.utils.metrics import MANAGED_RESOURCES, RECONCILIATION_DURATION, RECONCILIATION_TOTAL
 
 
 def _create_condition(
@@ -91,7 +92,31 @@ async def reconcile_mcpserver(
         **_: Additional kwargs from kopf.
     """
     logger.info(f"Reconciling MCPServer {namespace}/{name}")
+    timer = RECONCILIATION_DURATION.labels(controller="mcpserver").time()
+    timer.__enter__()
 
+    try:
+        await _reconcile_mcpserver_inner(
+            spec=spec, name=name, namespace=namespace, logger=logger, patch=patch, body=body
+        )
+        RECONCILIATION_TOTAL.labels(controller="mcpserver", result="success").inc()
+    except Exception:
+        RECONCILIATION_TOTAL.labels(controller="mcpserver", result="error").inc()
+        raise
+    finally:
+        timer.__exit__(None, None, None)
+
+
+async def _reconcile_mcpserver_inner(
+    *,
+    spec: dict[str, Any],
+    name: str,
+    namespace: str,
+    logger: kopf.Logger,
+    patch: kopf.Patch,
+    body: dict[str, Any],
+) -> None:
+    """Inner reconciliation logic for MCPServer."""
     # Parse and validate spec
     server_spec = MCPServerSpec(**spec)
 
@@ -354,6 +379,8 @@ async def reconcile_mcpserver(
     patch.status["promptCount"] = prompt_count
     patch.status["resourceCount"] = resource_count
     patch.status["conditions"] = [condition]
+
+    MANAGED_RESOURCES.labels(kind="MCPServer").inc(0)  # ensure metric exists
 
 
 @kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")  # type: ignore[arg-type]

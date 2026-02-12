@@ -16,6 +16,7 @@ from kubernetes import client
 
 from src.models.crds import MCPToolSpec
 from src.utils.k8s_client import get_k8s_client
+from src.utils.metrics import RECONCILIATION_DURATION, RECONCILIATION_TOTAL
 
 
 def _create_condition(
@@ -67,6 +68,26 @@ async def reconcile_mcptool(
     """
     logger.info(f"Reconciling MCPTool {namespace}/{name}")
 
+    with RECONCILIATION_DURATION.labels(controller="mcptool").time():
+        try:
+            await _reconcile_mcptool_inner(
+                spec=spec, name=name, namespace=namespace, logger=logger, patch=patch
+            )
+            RECONCILIATION_TOTAL.labels(controller="mcptool", result="success").inc()
+        except Exception:
+            RECONCILIATION_TOTAL.labels(controller="mcptool", result="error").inc()
+            raise
+
+
+async def _reconcile_mcptool_inner(
+    *,
+    spec: dict[str, Any],
+    name: str,
+    namespace: str,
+    logger: kopf.Logger,
+    patch: kopf.Patch,
+) -> None:
+    """Inner reconciliation logic for MCPTool."""
     # Parse and validate spec
     tool_spec = MCPToolSpec(**spec)
 
