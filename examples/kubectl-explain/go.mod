@@ -1,6 +1,6 @@
 module github.com/atippey/kube-mcp/examples/kubectl-explain
 
-go 1.22
+go 1.25
 
 require (
 	k8s.io/client-go v0.29.0
