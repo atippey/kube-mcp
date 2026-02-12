@@ -1,0 +1,77 @@
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPServer
+metadata:
+  name: crane-tool
+  namespace: mcp-test
+spec:
+  replicas: 1
+  redis:
+    serviceName: mcp-redis
+  toolSelector:
+    matchLabels:
+      mcp-server: crane-tool
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPTool
+metadata:
+  name: crane-images
+  namespace: mcp-test
+  labels:
+    mcp-server: crane-tool
+spec:
+  name: crane-images
+  description: |
+    List container images running in the Kubernetes cluster.
+    Returns image references, pod names, namespaces, and container names.
+    Use format "unique" to deduplicate by image reference, or "pods" for per-pod listing.
+  service:
+    name: crane-tool-svc
+    port: 8080
+    path: /images
+  inputSchema:
+    type: object
+    properties:
+      namespace:
+        type: string
+        description: |
+          Kubernetes namespace to list images from.
+          Leave empty to list images from all namespaces.
+      format:
+        type: string
+        description: |
+          Output format:
+          - "unique" (default): Deduplicate by image reference, show all pods using each image.
+          - "pods": One entry per container per pod.
+        default: "unique"
+    required: []
+  method: POST
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPTool
+metadata:
+  name: crane-inspect
+  namespace: mcp-test
+  labels:
+    mcp-server: crane-tool
+spec:
+  name: crane-inspect
+  description: |
+    Inspect a container image from its registry.
+    Returns digest, platform, config (env, entrypoint, cmd, labels, user),
+    layer details, and total size.
+    Works with any publicly accessible registry (Docker Hub, ghcr.io, etc).
+  service:
+    name: crane-tool-svc
+    port: 8080
+    path: /inspect
+  inputSchema:
+    type: object
+    properties:
+      image:
+        type: string
+        description: |
+          Full image reference to inspect.
+          Examples: "alpine:3.19", "ghcr.io/atippey/kubectl-explain:latest", "nginx:1.25"
+    required:
+      - image
+  method: POST

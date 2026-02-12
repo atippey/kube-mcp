@@ -65,3 +65,13 @@ dist/
 # Kubernetes
 kubeconfig
 *.kubeconfig
+.mcp.json
+
+# Go example compiled binaries
+examples/weather-tool/weather-tool
+examples/dns-tool/dns-tool
+examples/hash-tool/hash-tool
+examples/time-tool/time-tool
+examples/crane-tool/crane-tool
+examples/kube-info-tool/kube-info-tool
+examples/kubectl-explain/kubectl-explain
