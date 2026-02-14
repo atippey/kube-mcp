@@ -27,6 +27,11 @@ __all__ = [
 ]
 
 
+def _json_default(obj: object) -> str:
+    """Fallback serializer for objects that json can't handle (e.g. kopf settings)."""
+    return str(obj)
+
+
 def configure_logging() -> None:
     """Configure structured JSON logging for all operator output."""
     handler = logging.StreamHandler()
@@ -34,6 +39,7 @@ def configure_logging() -> None:
         JsonFormatter(
             fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
             rename_fields={"asctime": "timestamp", "levelname": "level"},
+            json_default=_json_default,
         )
     )
     logging.root.handlers = [handler]
