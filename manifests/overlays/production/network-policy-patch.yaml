@@ -1,0 +1,51 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mcp-operator-policy
+  namespace: mcp-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-operator
+      app.kubernetes.io/component: operator
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - port: 8080
+          protocol: TCP
+        - port: 9090
+          protocol: TCP
+  egress:
+    # Redis (same namespace)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mcp-redis
+              app.kubernetes.io/component: cache
+      ports:
+        - port: 6379
+          protocol: TCP
+    # Kubernetes API server egress defaults broad here so startup is safe.
+    # Controller reconciliation narrows this automatically from Endpoints/kubernetes,
+    # or from MCP_OPERATOR_API_SERVER_CIDR when set.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 6443
+          protocol: TCP
+    # DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP

@@ -136,6 +136,32 @@ make kustomize-k3d
 make kustomize-prod
 ```
 
+### Cross-Namespace Access
+
+NetworkPolicies restrict traffic to `mcp-system` by default. To allow pods from
+another namespace to reach MCP servers and Redis, label the namespace:
+
+```bash
+kubectl label namespace <namespace> mcp.k8s.turd.ninja/allow-cross-namespace=true
+```
+
+The k3d overlay opens MCP server ingress to all pods for local development.
+
+Operator API-server egress is reconciled automatically from `Endpoints/kubernetes`.
+To pin it explicitly, set `MCP_OPERATOR_API_SERVER_CIDR` on the operator Deployment
+(for example: `192.168.0.10/32`).
+
+For selectorless backends (including `ExternalName` Services), add egress hints
+on the `MCPTool` or `MCPResource`:
+
+```yaml
+metadata:
+  annotations:
+    mcp.k8s.turd.ninja/egress-mode: cidr      # selector|namespace|cidr
+    mcp.k8s.turd.ninja/egress-cidrs: 1.2.3.4/32,10.0.0.0/24
+    mcp.k8s.turd.ninja/egress-ports: "443,8443"  # optional; defaults to service port
+```
+
 ## Architecture
 
 ```

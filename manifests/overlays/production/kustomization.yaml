@@ -30,6 +30,11 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: 1Gi
+  # Harden operator egress — pin K8s API server to private CIDR instead of 0.0.0.0/0
+  - target:
+      kind: NetworkPolicy
+      name: mcp-operator-policy
+    path: network-policy-patch.yaml
   # Production Redis with more resources
   - target:
       kind: Deployment

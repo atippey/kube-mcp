@@ -1,0 +1,119 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mcp-operator-policy
+  namespace: mcp-system
+  labels:
+    app.kubernetes.io/name: mcp-operator
+    app.kubernetes.io/component: operator
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-operator
+      app.kubernetes.io/component: operator
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Health probes + metrics scraping from anywhere in the cluster
+    - ports:
+        - port: 8080
+          protocol: TCP
+        - port: 9090
+          protocol: TCP
+  egress:
+    # Redis (same namespace)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mcp-redis
+              app.kubernetes.io/component: cache
+      ports:
+        - port: 6379
+          protocol: TCP
+    # Kubernetes API server — broad by default, pin in production overlay
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 6443
+          protocol: TCP
+    # DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mcp-redis-policy
+  namespace: mcp-system
+  labels:
+    app.kubernetes.io/name: mcp-redis
+    app.kubernetes.io/component: cache
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-redis
+      app.kubernetes.io/component: cache
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Operator and MCP server pods in mcp-system
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mcp-operator
+              app.kubernetes.io/component: operator
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mcp-server
+        # Cross-namespace: MCP server pods from labeled namespaces
+        - namespaceSelector:
+            matchLabels:
+              mcp.k8s.turd.ninja/allow-cross-namespace: "true"
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mcp-server
+      ports:
+        - port: 6379
+          protocol: TCP
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mcp-server-policy
+  namespace: mcp-system
+  labels:
+    app.kubernetes.io/name: mcp-server
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Restrictive by default: only labeled namespaces can reach MCP server.
+    # Dev/k3d overlays patch this to be permissive.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              mcp.k8s.turd.ninja/allow-cross-namespace: "true"
+      ports:
+        - port: 8080
+          protocol: TCP
+  # Safe-by-default: deny all egress until MCPServer controller writes
+  # per-server egress allow rules.
+  egress: []

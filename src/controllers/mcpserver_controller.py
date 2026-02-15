@@ -8,7 +8,9 @@ Handles reconciliation of MCPServer resources. Responsible for:
 """
 
 import json
+import os
 from datetime import UTC, datetime
+from ipaddress import ip_network
 from typing import Any
 
 import kopf
@@ -16,6 +18,13 @@ import kopf
 from src.models.crds import MCPServerSpec
 from src.utils.k8s_client import get_k8s_client
 from src.utils.metrics import MANAGED_RESOURCES, RECONCILIATION_DURATION, RECONCILIATION_TOTAL
+
+EGRESS_MODE_ANNOTATION = "mcp.k8s.turd.ninja/egress-mode"
+EGRESS_PORTS_ANNOTATION = "mcp.k8s.turd.ninja/egress-ports"
+EGRESS_CIDRS_ANNOTATION = "mcp.k8s.turd.ninja/egress-cidrs"
+OPERATOR_API_SERVER_CIDR_ENV = "MCP_OPERATOR_API_SERVER_CIDR"
+DEFAULT_OPERATOR_API_SERVER_CIDR = "0.0.0.0/0"
+DEFAULT_OPERATOR_NAMESPACE = "mcp-system"
 
 
 def _create_condition(
@@ -80,6 +89,377 @@ def _resolve_tool_entry(
                 "inputSchema": input_schema,
             }
     return None
+
+
+def _parse_egress_ports(raw_ports: str | None, default_port: Any) -> list[int]:
+    """Parse egress ports annotation, or fall back to service ref port."""
+    if not raw_ports:
+        return [int(default_port)] if default_port else []
+
+    ports: list[int] = []
+    for item in raw_ports.split(","):
+        token = item.strip()
+        if not token:
+            continue
+        port = int(token)
+        if port < 1 or port > 65535:
+            raise ValueError(f"Invalid egress port: {port}")
+        ports.append(port)
+    return sorted(set(ports))
+
+
+def _parse_egress_cidrs(raw_cidrs: str | None) -> list[str]:
+    """Parse and validate CIDR annotation values."""
+    if not raw_cidrs:
+        return []
+    cidrs: list[str] = []
+    for item in raw_cidrs.split(","):
+        token = item.strip()
+        if not token:
+            continue
+        cidrs.append(str(ip_network(token, strict=False)))
+    return sorted(set(cidrs))
+
+
+def _resolve_service_target(
+    *,
+    source_kind: str,
+    source_name: str,
+    service_ref: dict[str, Any],
+    annotations: dict[str, str],
+    namespace: str,
+    k8s: Any,
+) -> dict[str, Any] | None:
+    """Resolve one service reference into a NetworkPolicy egress target."""
+    svc_name = service_ref.get("name")
+    svc_ns = service_ref.get("namespace") or namespace
+    svc_port = service_ref.get("port")
+    if not svc_name or not svc_port:
+        return None
+
+    svc = k8s.get_service(svc_name, svc_ns)
+    if not isinstance(svc, dict):
+        return None
+
+    svc_spec = svc.get("spec")
+    if not isinstance(svc_spec, dict):
+        return None
+
+    mode = annotations.get(EGRESS_MODE_ANNOTATION, "selector").strip().lower()
+    if mode not in {"selector", "namespace", "cidr"}:
+        raise ValueError(
+            f"{source_kind} {source_name}: invalid {EGRESS_MODE_ANNOTATION}={mode!r}, "
+            "expected selector|namespace|cidr"
+        )
+
+    ports = _parse_egress_ports(annotations.get(EGRESS_PORTS_ANNOTATION), svc_port)
+    if not ports:
+        raise ValueError(
+            f"{source_kind} {source_name}: no egress ports resolved for {svc_ns}/{svc_name}"
+        )
+
+    svc_type = (svc_spec.get("type") or "ClusterIP").strip()
+    selector_raw = svc_spec.get("selector")
+    selector: dict[str, str] = selector_raw if isinstance(selector_raw, dict) else {}
+
+    if svc_type == "ExternalName" and mode != "cidr":
+        raise ValueError(
+            f"{source_kind} {source_name}: service {svc_ns}/{svc_name} is ExternalName; "
+            f"set {EGRESS_MODE_ANNOTATION}=cidr and {EGRESS_CIDRS_ANNOTATION}"
+        )
+
+    if mode == "selector":
+        if not selector:
+            raise ValueError(
+                f"{source_kind} {source_name}: service {svc_ns}/{svc_name} has no selector; "
+                f"use {EGRESS_MODE_ANNOTATION}=namespace or cidr"
+            )
+        return {"mode": "selector", "namespace": svc_ns, "selector": selector, "ports": ports}
+
+    if mode == "namespace":
+        return {"mode": "namespace", "namespace": svc_ns, "ports": ports}
+
+    cidrs = _parse_egress_cidrs(annotations.get(EGRESS_CIDRS_ANNOTATION))
+    if not cidrs:
+        raise ValueError(
+            f"{source_kind} {source_name}: {EGRESS_MODE_ANNOTATION}=cidr requires {EGRESS_CIDRS_ANNOTATION}"
+        )
+    return {"mode": "cidr", "cidrs": cidrs, "ports": ports}
+
+
+def _collect_service_targets(
+    tools: list[dict[str, Any]],
+    resources: list[dict[str, Any]],
+    namespace: str,
+    k8s: Any,
+) -> list[dict[str, Any]]:
+    """Collect unique service targets from MCPTool and MCPResource CRs."""
+    targets: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+
+    def _add_target(target: dict[str, Any]) -> None:
+        mode = target["mode"]
+        key: tuple[Any, ...]
+        if mode == "selector":
+            key = (
+                mode,
+                target["namespace"],
+                tuple(sorted(target["selector"].items())),
+                tuple(target["ports"]),
+            )
+        elif mode == "namespace":
+            key = (mode, target["namespace"], tuple(target["ports"]))
+        else:
+            key = (mode, tuple(target["cidrs"]), tuple(target["ports"]))
+
+        if key not in seen:
+            seen.add(key)
+            targets.append(target)
+
+    for tool_cr in tools:
+        metadata = tool_cr.get("metadata", {})
+        annotations = metadata.get("annotations", {}) if isinstance(metadata, dict) else {}
+        if not isinstance(annotations, dict):
+            annotations = {}
+        tool_spec = tool_cr.get("spec", {})
+        target = _resolve_service_target(
+            source_kind="MCPTool",
+            source_name=metadata.get("name", "<unknown>"),
+            service_ref=tool_spec.get("service", {}),
+            annotations=annotations,
+            namespace=namespace,
+            k8s=k8s,
+        )
+        if target:
+            _add_target(target)
+
+    for resource_cr in resources:
+        metadata = resource_cr.get("metadata", {})
+        annotations = metadata.get("annotations", {}) if isinstance(metadata, dict) else {}
+        if not isinstance(annotations, dict):
+            annotations = {}
+        resource_spec = resource_cr.get("spec", {})
+        for operation in resource_spec.get("operations", []) or []:
+            target = _resolve_service_target(
+                source_kind="MCPResource",
+                source_name=metadata.get("name", "<unknown>"),
+                service_ref=operation.get("service", {}),
+                annotations=annotations,
+                namespace=namespace,
+                k8s=k8s,
+            )
+            if target:
+                _add_target(target)
+
+    return targets
+
+
+def _build_server_networkpolicy(
+    name: str,
+    namespace: str,
+    server_name: str,
+    service_targets: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build an egress NetworkPolicy for MCP server pods.
+
+    Generates precise egress rules for Redis, DNS, and each discovered
+    tool service (by namespace + pod selector).
+
+    Args:
+        name: The NetworkPolicy name.
+        namespace: The NetworkPolicy namespace.
+        server_name: The MCPServer name (for pod selector).
+        service_targets: List of service target dicts from _collect_service_targets.
+
+    Returns:
+        A NetworkPolicy body dict.
+    """
+    egress_rules: list[dict[str, Any]] = []
+
+    # Redis (same namespace)
+    egress_rules.append(
+        {
+            "to": [
+                {
+                    "podSelector": {
+                        "matchLabels": {
+                            "app.kubernetes.io/name": "mcp-redis",
+                            "app.kubernetes.io/component": "cache",
+                        }
+                    }
+                }
+            ],
+            "ports": [{"port": 6379, "protocol": "TCP"}],
+        }
+    )
+
+    # DNS resolution
+    egress_rules.append(
+        {
+            "to": [
+                {
+                    "namespaceSelector": {},
+                    "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}},
+                }
+            ],
+            "ports": [
+                {"port": 53, "protocol": "UDP"},
+                {"port": 53, "protocol": "TCP"},
+            ],
+        }
+    )
+
+    # Service-backed egress targets from MCPTools and MCPResources.
+    for target in service_targets:
+        ports = [{"port": port, "protocol": "TCP"} for port in target["ports"]]
+        if target["mode"] == "selector":
+            to = [
+                {
+                    "namespaceSelector": {
+                        "matchLabels": {
+                            "kubernetes.io/metadata.name": target["namespace"],
+                        }
+                    },
+                    "podSelector": {"matchLabels": target["selector"]},
+                }
+            ]
+        elif target["mode"] == "namespace":
+            to = [
+                {
+                    "namespaceSelector": {
+                        "matchLabels": {
+                            "kubernetes.io/metadata.name": target["namespace"],
+                        }
+                    }
+                }
+            ]
+        else:
+            to = [{"ipBlock": {"cidr": cidr}} for cidr in target["cidrs"]]
+
+        rule: dict[str, Any] = {"to": to, "ports": ports}
+        egress_rules.append(rule)
+
+    return {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {"name": name, "namespace": namespace},
+        "spec": {
+            "podSelector": {
+                "matchLabels": {
+                    "app.kubernetes.io/name": "mcp-server",
+                    "app.kubernetes.io/instance": server_name,
+                }
+            },
+            "policyTypes": ["Egress"],
+            "egress": egress_rules,
+        },
+    }
+
+
+def _resolve_operator_api_server_cidr(k8s: Any, logger: kopf.Logger) -> str:
+    """Resolve operator API server egress CIDR from env override or auto-detect."""
+    configured = os.getenv(OPERATOR_API_SERVER_CIDR_ENV)
+    if configured:
+        try:
+            normalized = str(ip_network(configured.strip(), strict=False))
+            logger.info(f"Using API server CIDR from {OPERATOR_API_SERVER_CIDR_ENV}: {normalized}")
+            return normalized
+        except ValueError:
+            logger.warning(
+                f"Ignoring invalid {OPERATOR_API_SERVER_CIDR_ENV} value: {configured!r}; "
+                "falling back to auto-detect"
+            )
+
+    detected = k8s.get_api_server_cidr()
+    if isinstance(detected, str) and detected.strip():
+        try:
+            normalized = str(ip_network(detected.strip(), strict=False))
+            logger.info(f"Detected API server CIDR from kubernetes endpoints: {normalized}")
+            return normalized
+        except ValueError:
+            logger.warning(f"Ignoring invalid detected API server CIDR: {detected!r}")
+
+    logger.warning(
+        "Falling back to broad API server CIDR allowlist "
+        f"{DEFAULT_OPERATOR_API_SERVER_CIDR}; set {OPERATOR_API_SERVER_CIDR_ENV} to harden"
+    )
+    return DEFAULT_OPERATOR_API_SERVER_CIDR
+
+
+def _build_operator_networkpolicy(namespace: str, api_server_cidr: str) -> dict[str, Any]:
+    """Build operator NetworkPolicy with API-server egress pinned to resolved CIDR."""
+    return {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {"name": "mcp-operator-policy", "namespace": namespace},
+        "spec": {
+            "podSelector": {
+                "matchLabels": {
+                    "app.kubernetes.io/name": "mcp-operator",
+                    "app.kubernetes.io/component": "operator",
+                }
+            },
+            "policyTypes": ["Ingress", "Egress"],
+            "ingress": [
+                {
+                    "ports": [
+                        {"port": 8080, "protocol": "TCP"},
+                        {"port": 9090, "protocol": "TCP"},
+                    ]
+                }
+            ],
+            "egress": [
+                {
+                    "to": [
+                        {
+                            "podSelector": {
+                                "matchLabels": {
+                                    "app.kubernetes.io/name": "mcp-redis",
+                                    "app.kubernetes.io/component": "cache",
+                                }
+                            }
+                        }
+                    ],
+                    "ports": [{"port": 6379, "protocol": "TCP"}],
+                },
+                {
+                    "to": [{"ipBlock": {"cidr": api_server_cidr}}],
+                    "ports": [
+                        {"port": 443, "protocol": "TCP"},
+                        {"port": 6443, "protocol": "TCP"},
+                    ],
+                },
+                {
+                    "to": [
+                        {
+                            "namespaceSelector": {},
+                            "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}},
+                        }
+                    ],
+                    "ports": [
+                        {"port": 53, "protocol": "UDP"},
+                        {"port": 53, "protocol": "TCP"},
+                    ],
+                },
+            ],
+        },
+    }
+
+
+def _reconcile_operator_networkpolicy(k8s: Any, logger: kopf.Logger) -> None:
+    """Reconcile shared operator NetworkPolicy with resolved API server CIDR."""
+    operator_namespace = os.getenv("NAMESPACE", DEFAULT_OPERATOR_NAMESPACE)
+    api_server_cidr = _resolve_operator_api_server_cidr(k8s, logger)
+    operator_netpol = _build_operator_networkpolicy(operator_namespace, api_server_cidr)
+    k8s.create_or_update_networkpolicy(
+        name="mcp-operator-policy",
+        namespace=operator_namespace,
+        body=operator_netpol,
+    )
+    logger.info(
+        f"Updated NetworkPolicy mcp-operator-policy in {operator_namespace} "
+        f"with API egress CIDR {api_server_cidr}"
+    )
 
 
 def _selector_to_dict(selector: Any) -> dict[str, Any]:
@@ -160,6 +540,7 @@ async def _reconcile_mcpserver_inner(
 
     # Get K8s client
     k8s = get_k8s_client()
+    _reconcile_operator_networkpolicy(k8s, logger)
 
     # Convert tool selector to dict for API calls
     selector_dict = _selector_to_dict(server_spec.toolSelector)
@@ -277,6 +658,25 @@ async def _reconcile_mcpserver_inner(
         owner_reference=owner_ref,
     )
     logger.info(f"Updated ConfigMap {config_map_name}")
+
+    # Generate egress NetworkPolicy from discovered tool/resource services
+    service_targets = _collect_service_targets(tools, resources, namespace, k8s)
+    netpol_name = f"mcp-server-{name}-egress"
+    netpol_body = _build_server_networkpolicy(
+        name=netpol_name,
+        namespace=namespace,
+        server_name=name,
+        service_targets=service_targets,
+    )
+    k8s.create_or_update_networkpolicy(
+        name=netpol_name,
+        namespace=namespace,
+        body=netpol_body,
+        owner_reference=owner_ref,
+    )
+    logger.info(
+        f"Updated NetworkPolicy {netpol_name} with {len(service_targets)} service target(s)"
+    )
 
     # Create Ingress if configured
     if server_spec.ingress:

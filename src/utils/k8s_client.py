@@ -298,6 +298,63 @@ class K8sClient:
 
         return cast(dict[str, Any], result.to_dict())
 
+    def create_or_update_networkpolicy(
+        self,
+        name: str,
+        namespace: str,
+        body: dict[str, Any],
+        owner_reference: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create or update a NetworkPolicy.
+
+        Args:
+            name: The NetworkPolicy name.
+            namespace: The NetworkPolicy namespace.
+            body: The NetworkPolicy body as a dict.
+            owner_reference: Optional owner reference for garbage collection.
+
+        Returns:
+            The created/updated NetworkPolicy as a dict.
+        """
+        # Inject owner reference into body metadata
+        if owner_reference:
+            body.setdefault("metadata", {})["ownerReferences"] = [
+                {
+                    "apiVersion": owner_reference.get("apiVersion"),
+                    "kind": owner_reference.get("kind"),
+                    "name": owner_reference.get("name"),
+                    "uid": owner_reference.get("uid"),
+                    "controller": owner_reference.get("controller", True),
+                    "blockOwnerDeletion": owner_reference.get("blockOwnerDeletion", True),
+                }
+            ]
+
+        try:
+            result = self.networking_v1.patch_namespaced_network_policy(name, namespace, body)
+        except ApiException as e:
+            if e.status == 404:
+                result = self.networking_v1.create_namespaced_network_policy(namespace, body)
+            else:
+                raise
+
+        return cast(dict[str, Any], result.to_dict())
+
+    def get_api_server_cidr(self) -> str | None:
+        """Auto-detect the API server IP from the 'kubernetes' Endpoints.
+
+        Reads the 'kubernetes' Endpoints in the 'default' namespace to find
+        the API server IP address.
+
+        Returns:
+            The API server CIDR as a /32, or None if detection fails.
+        """
+        try:
+            endpoints = self.core_v1.read_namespaced_endpoints("kubernetes", "default")
+            ip = endpoints.subsets[0].addresses[0].ip
+            return f"{ip}/32"
+        except Exception:
+            return None
+
     def create_or_update_ingress(
         self,
         name: str,

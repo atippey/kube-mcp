@@ -9,6 +9,7 @@ resources:
   - rbac/
   - redis.yaml
   - operator.yaml
+  - network-policy.yaml
 
 commonLabels:
   app.kubernetes.io/part-of: mcp-system

@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mcp-server-policy
+  namespace: mcp-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Dev/k3d: permissive — any pod in the cluster can reach MCP server
+    - ports:
+        - port: 8080
+          protocol: TCP
+  # Safe-by-default: deny all egress until MCPServer controller writes
+  # per-server egress allow rules.
+  egress: []
