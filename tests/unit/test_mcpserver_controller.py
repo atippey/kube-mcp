@@ -890,19 +890,44 @@ class TestMCPServerNetworkPolicyGeneration:
         svc_name: str,
         svc_port: int = 8080,
         svc_namespace: str | None = None,
+        annotations: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Helper to create a tool CR dict."""
         service: dict[str, Any] = {"name": svc_name, "port": svc_port}
         if svc_namespace:
             service["namespace"] = svc_namespace
         return {
-            "metadata": {"name": name, "namespace": "default"},
+            "metadata": {"name": name, "namespace": "default", "annotations": annotations or {}},
             "spec": {"name": name, "service": service},
         }
 
-    def _make_service_dict(self, selector: dict[str, str]) -> dict[str, Any]:
+    def _make_resource_cr(
+        self,
+        name: str,
+        svc_name: str,
+        svc_port: int = 8080,
+        svc_namespace: str | None = None,
+        annotations: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Helper to create a resource CR with one service-backed operation."""
+        service: dict[str, Any] = {"name": svc_name, "port": svc_port, "path": "/resource"}
+        if svc_namespace:
+            service["namespace"] = svc_namespace
+        return {
+            "metadata": {"name": name, "namespace": "default", "annotations": annotations or {}},
+            "spec": {
+                "name": name,
+                "operations": [{"method": "GET", "ingressPath": "/r/{id}", "service": service}],
+            },
+        }
+
+    def _make_service_dict(
+        self,
+        selector: dict[str, str] | None,
+        svc_type: str = "ClusterIP",
+    ) -> dict[str, Any]:
         """Helper to create a service dict returned by get_service."""
-        return {"spec": {"selector": selector}}
+        return {"spec": {"selector": selector, "type": svc_type}}
 
     @pytest.mark.asyncio
     async def test_reconcile_creates_networkpolicy_with_tool_services(
@@ -1122,3 +1147,238 @@ class TestMCPServerNetworkPolicyGeneration:
             "app.kubernetes.io/name": "mcp-server",
             "app.kubernetes.io/instance": "test-server",
         }
+
+    @pytest.mark.asyncio
+    async def test_reconcile_networkpolicy_includes_resource_service_targets(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Resource operations with service refs should generate egress allow rules."""
+        tool1 = self._make_tool_cr("tool1", "tool-svc")
+        resource1 = self._make_resource_cr("resource1", "resource-svc")
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[tool1], [], [resource1]]
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+        mock_k8s.get_service.side_effect = lambda name, ns: self._make_service_dict({"app": name})
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        call_args = mock_k8s.create_or_update_networkpolicy.call_args
+        egress = call_args.kwargs["body"]["spec"]["egress"]
+        # Redis + DNS + tool + resource = 4 rules
+        assert len(egress) == 4
+
+    @pytest.mark.asyncio
+    async def test_reconcile_networkpolicy_fails_selectorless_without_annotation(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Selectorless services must declare namespace/cidr egress mode."""
+        tool1 = self._make_tool_cr("tool1", "selectorless-svc")
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+        mock_k8s.get_service.return_value = self._make_service_dict(None)
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with (
+            patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s),
+            pytest.raises(ValueError, match="has no selector"),
+        ):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+    @pytest.mark.asyncio
+    async def test_reconcile_networkpolicy_allows_selectorless_namespace_mode(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Selectorless services can be allowed via namespace mode annotation."""
+        tool1 = self._make_tool_cr(
+            "tool1",
+            "selectorless-svc",
+            annotations={"mcp.k8s.turd.ninja/egress-mode": "namespace"},
+        )
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+        mock_k8s.get_service.return_value = self._make_service_dict(None)
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        call_args = mock_k8s.create_or_update_networkpolicy.call_args
+        svc_rule = call_args.kwargs["body"]["spec"]["egress"][2]
+        assert "podSelector" not in svc_rule["to"][0]
+        assert svc_rule["to"][0]["namespaceSelector"]["matchLabels"] == {
+            "kubernetes.io/metadata.name": "default"
+        }
+
+    @pytest.mark.asyncio
+    async def test_reconcile_networkpolicy_externalname_requires_cidr_mode(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """ExternalName services require CIDR mode with explicit cidrs."""
+        tool1 = self._make_tool_cr("tool1", "external-svc")
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+        mock_k8s.get_service.return_value = self._make_service_dict(None, svc_type="ExternalName")
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with (
+            patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s),
+            pytest.raises(ValueError, match="ExternalName"),
+        ):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+    @pytest.mark.asyncio
+    async def test_reconcile_networkpolicy_externalname_cidr_mode_success(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """ExternalName service can be allowed via cidr mode annotations."""
+        tool1 = self._make_tool_cr(
+            "tool1",
+            "external-svc",
+            annotations={
+                "mcp.k8s.turd.ninja/egress-mode": "cidr",
+                "mcp.k8s.turd.ninja/egress-cidrs": "1.2.3.4/32",
+            },
+        )
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+        mock_k8s.get_service.return_value = self._make_service_dict(None, svc_type="ExternalName")
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        call_args = mock_k8s.create_or_update_networkpolicy.call_args
+        svc_rule = call_args.kwargs["body"]["spec"]["egress"][2]
+        assert svc_rule["to"] == [{"ipBlock": {"cidr": "1.2.3.4/32"}}]
+        assert svc_rule["ports"] == [{"port": 8080, "protocol": "TCP"}]
+
+    @pytest.mark.asyncio
+    async def test_reconcile_networkpolicy_cidr_mode_multiple_cidrs_and_ports(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """CIDR mode should normalize and deduplicate CIDRs and ports."""
+        tool1 = self._make_tool_cr(
+            "tool1",
+            "external-svc",
+            svc_port=443,
+            annotations={
+                "mcp.k8s.turd.ninja/egress-mode": "cidr",
+                "mcp.k8s.turd.ninja/egress-cidrs": "10.0.0.0/8, 10.0.0.0/8, 1.2.3.4/32",
+                "mcp.k8s.turd.ninja/egress-ports": "8443,443,443",
+            },
+        )
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+        mock_k8s.get_service.return_value = self._make_service_dict(None, svc_type="ExternalName")
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        call_args = mock_k8s.create_or_update_networkpolicy.call_args
+        svc_rule = call_args.kwargs["body"]["spec"]["egress"][2]
+        assert svc_rule["to"] == [
+            {"ipBlock": {"cidr": "1.2.3.4/32"}},
+            {"ipBlock": {"cidr": "10.0.0.0/8"}},
+        ]
+        assert svc_rule["ports"] == [
+            {"port": 443, "protocol": "TCP"},
+            {"port": 8443, "protocol": "TCP"},
+        ]

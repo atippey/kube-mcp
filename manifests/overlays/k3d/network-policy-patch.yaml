@@ -9,10 +9,12 @@ spec:
       app.kubernetes.io/name: mcp-server
   policyTypes:
     - Ingress
+    - Egress
   ingress:
     # Dev/k3d: permissive — any pod in the cluster can reach MCP server
     - ports:
         - port: 8080
           protocol: TCP
-  # Egress is managed by the MCPServer controller (per-server NetworkPolicy
-  # generated during reconciliation with precise per-service rules).
+  # Safe-by-default: deny all egress until MCPServer controller writes
+  # per-server egress allow rules.
+  egress: []

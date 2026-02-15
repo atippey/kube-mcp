@@ -147,6 +147,17 @@ kubectl label namespace <namespace> mcp.k8s.turd.ninja/allow-cross-namespace=tru
 
 The k3d overlay opens MCP server ingress to all pods for local development.
 
+For selectorless backends (including `ExternalName` Services), add egress hints
+on the `MCPTool` or `MCPResource`:
+
+```yaml
+metadata:
+  annotations:
+    mcp.k8s.turd.ninja/egress-mode: cidr      # selector|namespace|cidr
+    mcp.k8s.turd.ninja/egress-cidrs: 1.2.3.4/32,10.0.0.0/24
+    mcp.k8s.turd.ninja/egress-ports: "443,8443"  # optional; defaults to service port
+```
+
 ## Architecture
 
 ```

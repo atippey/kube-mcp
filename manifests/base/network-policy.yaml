@@ -103,6 +103,7 @@ spec:
       app.kubernetes.io/name: mcp-server
   policyTypes:
     - Ingress
+    - Egress
   ingress:
     # Restrictive by default: only labeled namespaces can reach MCP server.
     # Dev/k3d overlays patch this to be permissive.
@@ -113,5 +114,6 @@ spec:
       ports:
         - port: 8080
           protocol: TCP
-  # Egress is managed by the MCPServer controller (per-server NetworkPolicy
-  # generated during reconciliation with precise per-service rules).
+  # Safe-by-default: deny all egress until MCPServer controller writes
+  # per-server egress allow rules.
+  egress: []

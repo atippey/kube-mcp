@@ -9,6 +9,7 @@ Handles reconciliation of MCPServer resources. Responsible for:
 
 import json
 from datetime import UTC, datetime
+from ipaddress import ip_network
 from typing import Any
 
 import kopf
@@ -16,6 +17,10 @@ import kopf
 from src.models.crds import MCPServerSpec
 from src.utils.k8s_client import get_k8s_client
 from src.utils.metrics import MANAGED_RESOURCES, RECONCILIATION_DURATION, RECONCILIATION_TOTAL
+
+EGRESS_MODE_ANNOTATION = "mcp.k8s.turd.ninja/egress-mode"
+EGRESS_PORTS_ANNOTATION = "mcp.k8s.turd.ninja/egress-ports"
+EGRESS_CIDRS_ANNOTATION = "mcp.k8s.turd.ninja/egress-cidrs"
 
 
 def _create_condition(
@@ -82,51 +87,165 @@ def _resolve_tool_entry(
     return None
 
 
+def _parse_egress_ports(raw_ports: str | None, default_port: Any) -> list[int]:
+    """Parse egress ports annotation, or fall back to service ref port."""
+    if not raw_ports:
+        return [int(default_port)] if default_port else []
+
+    ports: list[int] = []
+    for item in raw_ports.split(","):
+        token = item.strip()
+        if not token:
+            continue
+        port = int(token)
+        if port < 1 or port > 65535:
+            raise ValueError(f"Invalid egress port: {port}")
+        ports.append(port)
+    return sorted(set(ports))
+
+
+def _parse_egress_cidrs(raw_cidrs: str | None) -> list[str]:
+    """Parse and validate CIDR annotation values."""
+    if not raw_cidrs:
+        return []
+    cidrs: list[str] = []
+    for item in raw_cidrs.split(","):
+        token = item.strip()
+        if not token:
+            continue
+        cidrs.append(str(ip_network(token, strict=False)))
+    return sorted(set(cidrs))
+
+
+def _resolve_service_target(
+    *,
+    source_kind: str,
+    source_name: str,
+    service_ref: dict[str, Any],
+    annotations: dict[str, str],
+    namespace: str,
+    k8s: Any,
+) -> dict[str, Any] | None:
+    """Resolve one service reference into a NetworkPolicy egress target."""
+    svc_name = service_ref.get("name")
+    svc_ns = service_ref.get("namespace") or namespace
+    svc_port = service_ref.get("port")
+    if not svc_name or not svc_port:
+        return None
+
+    svc = k8s.get_service(svc_name, svc_ns)
+    if not isinstance(svc, dict):
+        return None
+
+    svc_spec = svc.get("spec")
+    if not isinstance(svc_spec, dict):
+        return None
+
+    mode = annotations.get(EGRESS_MODE_ANNOTATION, "selector").strip().lower()
+    if mode not in {"selector", "namespace", "cidr"}:
+        raise ValueError(
+            f"{source_kind} {source_name}: invalid {EGRESS_MODE_ANNOTATION}={mode!r}, "
+            "expected selector|namespace|cidr"
+        )
+
+    ports = _parse_egress_ports(annotations.get(EGRESS_PORTS_ANNOTATION), svc_port)
+    if not ports:
+        raise ValueError(
+            f"{source_kind} {source_name}: no egress ports resolved for {svc_ns}/{svc_name}"
+        )
+
+    svc_type = (svc_spec.get("type") or "ClusterIP").strip()
+    selector_raw = svc_spec.get("selector")
+    selector: dict[str, str] = selector_raw if isinstance(selector_raw, dict) else {}
+
+    if svc_type == "ExternalName" and mode != "cidr":
+        raise ValueError(
+            f"{source_kind} {source_name}: service {svc_ns}/{svc_name} is ExternalName; "
+            f"set {EGRESS_MODE_ANNOTATION}=cidr and {EGRESS_CIDRS_ANNOTATION}"
+        )
+
+    if mode == "selector":
+        if not selector:
+            raise ValueError(
+                f"{source_kind} {source_name}: service {svc_ns}/{svc_name} has no selector; "
+                f"use {EGRESS_MODE_ANNOTATION}=namespace or cidr"
+            )
+        return {"mode": "selector", "namespace": svc_ns, "selector": selector, "ports": ports}
+
+    if mode == "namespace":
+        return {"mode": "namespace", "namespace": svc_ns, "ports": ports}
+
+    cidrs = _parse_egress_cidrs(annotations.get(EGRESS_CIDRS_ANNOTATION))
+    if not cidrs:
+        raise ValueError(
+            f"{source_kind} {source_name}: {EGRESS_MODE_ANNOTATION}=cidr requires {EGRESS_CIDRS_ANNOTATION}"
+        )
+    return {"mode": "cidr", "cidrs": cidrs, "ports": ports}
+
+
 def _collect_service_targets(
     tools: list[dict[str, Any]],
+    resources: list[dict[str, Any]],
     namespace: str,
     k8s: Any,
 ) -> list[dict[str, Any]]:
-    """Collect unique service targets from tool CRs for NetworkPolicy generation.
-
-    Deduplicates by (namespace, name, port) and looks up each Service's pod
-    selector for precise egress rules.
-
-    Args:
-        tools: List of MCPTool custom resource dicts.
-        namespace: Default namespace if not specified in service ref.
-        k8s: The Kubernetes client.
-
-    Returns:
-        List of dicts with namespace, selector, and port keys.
-    """
-    seen: set[tuple[str, str, int]] = set()
+    """Collect unique service targets from MCPTool and MCPResource CRs."""
     targets: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+
+    def _add_target(target: dict[str, Any]) -> None:
+        mode = target["mode"]
+        key: tuple[Any, ...]
+        if mode == "selector":
+            key = (
+                mode,
+                target["namespace"],
+                tuple(sorted(target["selector"].items())),
+                tuple(target["ports"]),
+            )
+        elif mode == "namespace":
+            key = (mode, target["namespace"], tuple(target["ports"]))
+        else:
+            key = (mode, tuple(target["cidrs"]), tuple(target["ports"]))
+
+        if key not in seen:
+            seen.add(key)
+            targets.append(target)
 
     for tool_cr in tools:
+        metadata = tool_cr.get("metadata", {})
+        annotations = metadata.get("annotations", {}) if isinstance(metadata, dict) else {}
+        if not isinstance(annotations, dict):
+            annotations = {}
         tool_spec = tool_cr.get("spec", {})
-        service_ref = tool_spec.get("service", {})
-        svc_name = service_ref.get("name")
-        svc_ns = service_ref.get("namespace") or namespace
-        svc_port = service_ref.get("port")
+        target = _resolve_service_target(
+            source_kind="MCPTool",
+            source_name=metadata.get("name", "<unknown>"),
+            service_ref=tool_spec.get("service", {}),
+            annotations=annotations,
+            namespace=namespace,
+            k8s=k8s,
+        )
+        if target:
+            _add_target(target)
 
-        if not svc_name or not svc_port:
-            continue
-
-        key = (svc_ns, svc_name, svc_port)
-        if key in seen:
-            continue
-        seen.add(key)
-
-        svc = k8s.get_service(svc_name, svc_ns)
-        if svc:
-            targets.append(
-                {
-                    "namespace": svc_ns,
-                    "selector": svc.get("spec", {}).get("selector", {}),
-                    "port": svc_port,
-                }
+    for resource_cr in resources:
+        metadata = resource_cr.get("metadata", {})
+        annotations = metadata.get("annotations", {}) if isinstance(metadata, dict) else {}
+        if not isinstance(annotations, dict):
+            annotations = {}
+        resource_spec = resource_cr.get("spec", {})
+        for operation in resource_spec.get("operations", []) or []:
+            target = _resolve_service_target(
+                source_kind="MCPResource",
+                source_name=metadata.get("name", "<unknown>"),
+                service_ref=operation.get("service", {}),
+                annotations=annotations,
+                namespace=namespace,
+                k8s=k8s,
             )
+            if target:
+                _add_target(target)
 
     return targets
 
@@ -186,10 +305,11 @@ def _build_server_networkpolicy(
         }
     )
 
-    # Per-tool-service egress (precise namespace + pod selector)
+    # Service-backed egress targets from MCPTools and MCPResources.
     for target in service_targets:
-        rule: dict[str, Any] = {
-            "to": [
+        ports = [{"port": port, "protocol": "TCP"} for port in target["ports"]]
+        if target["mode"] == "selector":
+            to = [
                 {
                     "namespaceSelector": {
                         "matchLabels": {
@@ -198,9 +318,21 @@ def _build_server_networkpolicy(
                     },
                     "podSelector": {"matchLabels": target["selector"]},
                 }
-            ],
-            "ports": [{"port": target["port"], "protocol": "TCP"}],
-        }
+            ]
+        elif target["mode"] == "namespace":
+            to = [
+                {
+                    "namespaceSelector": {
+                        "matchLabels": {
+                            "kubernetes.io/metadata.name": target["namespace"],
+                        }
+                    }
+                }
+            ]
+        else:
+            to = [{"ipBlock": {"cidr": cidr}} for cidr in target["cidrs"]]
+
+        rule: dict[str, Any] = {"to": to, "ports": ports}
         egress_rules.append(rule)
 
     return {
@@ -416,8 +548,8 @@ async def _reconcile_mcpserver_inner(
     )
     logger.info(f"Updated ConfigMap {config_map_name}")
 
-    # Generate egress NetworkPolicy from discovered tool services
-    service_targets = _collect_service_targets(tools, namespace, k8s)
+    # Generate egress NetworkPolicy from discovered tool/resource services
+    service_targets = _collect_service_targets(tools, resources, namespace, k8s)
     netpol_name = f"mcp-server-{name}-egress"
     netpol_body = _build_server_networkpolicy(
         name=netpol_name,
