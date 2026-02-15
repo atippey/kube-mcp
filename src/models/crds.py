@@ -5,7 +5,7 @@ These models mirror the CRD schemas and provide validation for the operator.
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # =============================================================================
 # Common models
@@ -98,15 +98,43 @@ class MCPServerStatus(BaseModel):
 # =============================================================================
 
 
-class MCPToolSpec(BaseModel):
-    """MCPTool spec."""
+class ToolEntry(BaseModel):
+    """A single tool entry in a multi-tool MCPTool."""
 
     name: str = Field(..., min_length=1, max_length=63)
+    path: str = Field(..., pattern=r"^/.*$")
+    description: str | None = Field(default=None, max_length=500)
+    inputSchema: dict[str, Any] | None = None
+    method: str = Field(default="POST", pattern=r"^(GET|POST|PUT|DELETE|PATCH)$")
+
+
+class MCPToolSpec(BaseModel):
+    """MCPTool spec.
+
+    Supports two modes:
+    - Single-tool: set ``name`` (and optionally ``inputSchema``, ``method``, etc.)
+    - Multi-tool: set ``tools`` with a list of ToolEntry items sharing ``service``
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=63)
     description: str | None = Field(default=None, max_length=500)
     service: ServiceReference
     inputSchema: dict[str, Any] | None = None
     method: str = Field(default="POST", pattern=r"^(GET|POST|PUT|DELETE|PATCH)$")
     ingressPath: str | None = Field(default=None, pattern=r"^/.*$")
+    tools: list[ToolEntry] | None = None
+
+    @model_validator(mode="after")
+    def validate_tool_mode(self) -> "MCPToolSpec":
+        """Ensure exactly one of 'name' (single-tool) or 'tools' (multi-tool) is set."""
+        if self.name and self.tools:
+            raise ValueError(
+                "Cannot specify both 'name' and 'tools'. "
+                "Use 'name' for single-tool mode or 'tools' for multi-tool mode."
+            )
+        if not self.name and not self.tools:
+            raise ValueError("Must specify either 'name' (single-tool) or 'tools' (multi-tool).")
+        return self
 
 
 class MCPToolStatus(BaseModel):

@@ -57,6 +57,35 @@ def sample_mcptool_spec() -> dict[str, Any]:
 
 
 @pytest.fixture
+def sample_mcptool_spec_multi() -> dict[str, Any]:
+    """Return a multi-tool MCPTool spec."""
+    return {
+        "service": {"name": "crane-tool-svc", "port": 8080},
+        "tools": [
+            {
+                "name": "crane-images",
+                "path": "/images",
+                "description": "List images",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"namespace": {"type": "string"}},
+                },
+            },
+            {
+                "name": "crane-inspect",
+                "path": "/inspect",
+                "description": "Inspect image",
+                "inputSchema": {
+                    "type": "object",
+                    "required": ["image"],
+                    "properties": {"image": {"type": "string"}},
+                },
+            },
+        ],
+    }
+
+
+@pytest.fixture
 def sample_mcpprompt_spec() -> dict[str, Any]:
     """Return a sample MCPPrompt spec."""
     return {
