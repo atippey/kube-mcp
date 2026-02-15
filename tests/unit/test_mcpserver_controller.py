@@ -721,8 +721,7 @@ class TestMCPServerMultiToolExpansion:
             "spec": {
                 "service": {"name": "crane-svc", "port": 8080},
                 "tools": [
-                    {"name": "crane-images", "path": "/images",
-                     "inputSchema": {"type": "object"}},
+                    {"name": "crane-images", "path": "/images", "inputSchema": {"type": "object"}},
                     {"name": "crane-inspect", "path": "/inspect"},
                 ],
             },
@@ -730,7 +729,9 @@ class TestMCPServerMultiToolExpansion:
 
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [
-            [multi_tool_cr], [], [],
+            [multi_tool_cr],
+            [],
+            [],
         ]
         mock_k8s.get_service_endpoint.side_effect = (
             lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
@@ -787,7 +788,9 @@ class TestMCPServerMultiToolExpansion:
 
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [
-            [single_tool_cr, multi_tool_cr], [], [],
+            [single_tool_cr, multi_tool_cr],
+            [],
+            [],
         ]
         mock_k8s.get_service_endpoint.side_effect = (
             lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"

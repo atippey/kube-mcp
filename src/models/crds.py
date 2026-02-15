@@ -133,9 +133,7 @@ class MCPToolSpec(BaseModel):
                 "Use 'name' for single-tool mode or 'tools' for multi-tool mode."
             )
         if not self.name and not self.tools:
-            raise ValueError(
-                "Must specify either 'name' (single-tool) or 'tools' (multi-tool)."
-            )
+            raise ValueError("Must specify either 'name' (single-tool) or 'tools' (multi-tool).")
         return self
 
 
