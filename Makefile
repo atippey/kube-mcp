@@ -3,7 +3,8 @@
         k3d-crds k3d-redis k3d-examples k3d-build k3d-deploy \
         kustomize-dev kustomize-k3d kustomize-prod \
         docker-build-multiarch \
-        sample-build sample-push sample-deploy
+        sample-build sample-push sample-deploy \
+        scaffold
 
 # Image configuration
 IMAGE ?= mcp-operator
@@ -46,6 +47,10 @@ help:
 	@echo "  make sample-build   Build echo-server image locally"
 	@echo "  make sample-push    Build and push echo-server to registry"
 	@echo "  make sample-deploy  Deploy sample resources to cluster"
+	@echo ""
+	@echo "Scaffold:"
+	@echo "  make scaffold NAME=my-tool ENDPOINT=/path DESC=\"description\""
+	@echo "  make scaffold NAME=my-tool ENDPOINT=/path DESC=\"description\" RBAC=true"
 	@echo ""
 	@echo "Kustomize:"
 	@echo "  make kustomize-dev   Apply dev overlay"
@@ -170,3 +175,14 @@ sample-push:
 
 sample-deploy:
 	kubectl apply -k examples/echo-server/manifests/
+
+# =============================================================================
+# Scaffold Generator
+# =============================================================================
+
+scaffold:
+	@if [ -z "$(NAME)" ]; then echo "Usage: make scaffold NAME=my-tool ENDPOINT=/path DESC=\"description\" [RBAC=true]"; exit 1; fi
+	./scripts/scaffold-tool.sh --name "$(NAME)" \
+		--endpoint "$(or $(ENDPOINT),/$(NAME))" \
+		--description "$(or $(DESC),TODO: add description)" \
+		$(if $(RBAC),--rbac)
