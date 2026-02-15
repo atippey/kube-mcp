@@ -125,15 +125,23 @@ async def _reconcile_mcptool_inner(
         tool_spec.service.port,
     )
 
-    # Append the path from spec
-    resolved_endpoint = f"{base_endpoint}{tool_spec.service.path}"
-    # Clean up double slashes (except in http://)
-    resolved_endpoint = resolved_endpoint.replace("://", "___PROTO___")
-    while "//" in resolved_endpoint:
-        resolved_endpoint = resolved_endpoint.replace("//", "/")
-    resolved_endpoint = resolved_endpoint.replace("___PROTO___", "://")
-
-    logger.info(f"Resolved endpoint for MCPTool {name}: {resolved_endpoint}")
+    if tool_spec.tools:
+        # Multi-tool mode: resolved endpoint is the base service URL
+        resolved_endpoint = base_endpoint or ""
+        tool_count = len(tool_spec.tools)
+        logger.info(
+            f"Resolved base endpoint for multi-tool MCPTool {name} "
+            f"({tool_count} tools): {resolved_endpoint}"
+        )
+    else:
+        # Single-tool mode: append path from spec
+        resolved_endpoint = f"{base_endpoint}{tool_spec.service.path}"
+        # Clean up double slashes (except in http://)
+        resolved_endpoint = resolved_endpoint.replace("://", "___PROTO___")
+        while "//" in resolved_endpoint:
+            resolved_endpoint = resolved_endpoint.replace("//", "/")
+        resolved_endpoint = resolved_endpoint.replace("___PROTO___", "://")
+        logger.info(f"Resolved endpoint for MCPTool {name}: {resolved_endpoint}")
 
     patch.status["ready"] = True
     patch.status["resolvedEndpoint"] = resolved_endpoint

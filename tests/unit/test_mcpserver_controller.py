@@ -681,3 +681,176 @@ class TestMCPServerReconciliation:
             )
 
         mock_k8s.create_or_update_ingress.assert_not_called()
+
+
+class TestMCPServerMultiToolExpansion:
+    """Tests for multi-tool MCPTool expansion in MCPServer reconciliation."""
+
+    @pytest.fixture
+    def mock_logger(self) -> MagicMock:
+        """Create a mock logger."""
+        return MagicMock()
+
+    @pytest.fixture(autouse=True)
+    def mock_adopt(self) -> MagicMock:
+        """Mock kopf.adopt for all tests in this class."""
+        with patch("src.controllers.mcpserver_controller.kopf.adopt") as mock:
+            yield mock
+
+    @pytest.fixture
+    def sample_body(self) -> dict[str, Any]:
+        """Create a sample resource body."""
+        return {
+            "metadata": {
+                "name": "test-server",
+                "namespace": "default",
+                "uid": "test-uid-456",
+            }
+        }
+
+    @pytest.mark.asyncio
+    async def test_reconcile_expands_multi_tool_mcptool(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that a multi-tool MCPTool CR is expanded to multiple tools.json entries."""
+        multi_tool_cr = {
+            "metadata": {"name": "crane-tools", "namespace": "default"},
+            "spec": {
+                "service": {"name": "crane-svc", "port": 8080},
+                "tools": [
+                    {"name": "crane-images", "path": "/images",
+                     "inputSchema": {"type": "object"}},
+                    {"name": "crane-inspect", "path": "/inspect"},
+                ],
+            },
+        }
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [
+            [multi_tool_cr], [], [],
+        ]
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        # Verify ConfigMap has 2 tool entries from 1 MCPTool CR
+        call_args = mock_k8s.create_or_update_configmap.call_args[1]
+        tools_json = json.loads(call_args["data"]["tools.json"])
+        assert len(tools_json) == 2
+        assert tools_json[0]["name"] == "crane-images"
+        assert "/images" in tools_json[0]["endpoint"]
+        assert tools_json[1]["name"] == "crane-inspect"
+        assert "/inspect" in tools_json[1]["endpoint"]
+        assert mock_patch_obj.status["toolCount"] == 2
+
+    @pytest.mark.asyncio
+    async def test_reconcile_mixes_single_and_multi_tool(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that single-tool and multi-tool MCPTool CRs are merged correctly."""
+        single_tool_cr = {
+            "metadata": {"name": "hash-tool", "namespace": "default"},
+            "spec": {
+                "name": "hash-tool",
+                "service": {"name": "hash-svc", "port": 8080, "path": "/hash"},
+            },
+        }
+        multi_tool_cr = {
+            "metadata": {"name": "crane-tools", "namespace": "default"},
+            "spec": {
+                "service": {"name": "crane-svc", "port": 8080},
+                "tools": [
+                    {"name": "crane-images", "path": "/images"},
+                    {"name": "crane-inspect", "path": "/inspect"},
+                ],
+            },
+        }
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [
+            [single_tool_cr, multi_tool_cr], [], [],
+        ]
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        call_args = mock_k8s.create_or_update_configmap.call_args[1]
+        tools_json = json.loads(call_args["data"]["tools.json"])
+        assert len(tools_json) == 3
+        tool_names = [t["name"] for t in tools_json]
+        assert "hash-tool" in tool_names
+        assert "crane-images" in tool_names
+        assert "crane-inspect" in tool_names
+        assert mock_patch_obj.status["toolCount"] == 3
+
+    @pytest.mark.asyncio
+    async def test_reconcile_tool_count_reflects_expanded_tools(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that toolCount reflects expanded tool entries, not MCPTool CR count."""
+        multi_tool_cr = {
+            "metadata": {"name": "multi", "namespace": "default"},
+            "spec": {
+                "service": {"name": "svc", "port": 8080},
+                "tools": [
+                    {"name": "tool-a", "path": "/a"},
+                    {"name": "tool-b", "path": "/b"},
+                    {"name": "tool-c", "path": "/c"},
+                ],
+            },
+        }
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[multi_tool_cr], [], []]
+        mock_k8s.get_service_endpoint.return_value = "http://svc.default.svc.cluster.local:8080"
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        # 1 MCPTool CR with 3 tools = toolCount should be 3
+        assert mock_patch_obj.status["toolCount"] == 3

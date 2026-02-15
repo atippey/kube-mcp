@@ -21,16 +21,9 @@ Project is **75-80% production-ready** with solid fundamentals:
 
 ## Phase 2: Observability
 
-- [ ] **Prometheus metrics** - Add prometheus-client, expose /metrics endpoint
-  - New file: `src/utils/metrics.py`
-  - Metrics: reconciliation_total, reconciliation_errors, reconciliation_duration_seconds
-  - Update Dockerfile to expose port 8080 for metrics
-
-- [ ] **Health endpoints** - Add /healthz and /readyz
-  - Can use kopf's built-in health server or add aiohttp
-
-- [ ] **Structured logging** - Switch to JSON format logging
-  - Configure kopf logging settings in main.py
+- [x] **Prometheus metrics** - prometheus-client on :9090, reconciliation_total/duration/errors counters _(merged PR #32)_
+- [x] **Health endpoints** - kopf liveness probe on :8080/healthz _(merged PR #32)_
+- [x] **Structured logging** - JSON format via python-json-logger _(merged PR #32)_
 
 ---
 

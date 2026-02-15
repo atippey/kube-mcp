@@ -44,6 +44,41 @@ def _create_condition(
     }
 
 
+def _resolve_tool_entry(
+    tool_name: str | None,
+    service_ref: dict[str, Any],
+    input_schema: dict[str, Any] | None,
+    namespace: str,
+    k8s: Any,
+) -> dict[str, Any] | None:
+    """Resolve a tool's service reference to a ConfigMap entry.
+
+    Args:
+        tool_name: The MCP tool name.
+        service_ref: Dict with name, port, path, namespace keys.
+        input_schema: Optional JSON Schema for the tool.
+        namespace: Default namespace if not specified in service_ref.
+        k8s: The Kubernetes client.
+
+    Returns:
+        A dict with name, endpoint, inputSchema or None if unresolvable.
+    """
+    svc_name = service_ref.get("name")
+    svc_port = service_ref.get("port")
+    svc_path = service_ref.get("path", "/")
+    svc_ns = service_ref.get("namespace") or namespace
+
+    if svc_name and svc_port:
+        base_endpoint = k8s.get_service_endpoint(svc_name, svc_ns, svc_port)
+        if base_endpoint:
+            return {
+                "name": tool_name,
+                "endpoint": f"{base_endpoint}{svc_path}",
+                "inputSchema": input_schema,
+            }
+    return None
+
+
 def _selector_to_dict(selector: Any) -> dict[str, Any]:
     """Convert a LabelSelector model to a dict.
 
@@ -134,8 +169,7 @@ async def _reconcile_mcpserver_inner(
         namespace=namespace,
         label_selector=selector_dict,
     )
-    tool_count = len(tools)
-    logger.info(f"Found {tool_count} MCPTools matching selector")
+    logger.info(f"Found {len(tools)} MCPTool CRs matching selector")
 
     # Find matching MCPPrompts
     prompts = k8s.list_by_label_selector(
@@ -159,28 +193,36 @@ async def _reconcile_mcpserver_inner(
     resource_count = len(resources)
     logger.info(f"Found {resource_count} MCPResources matching selector")
 
-    # Generate ConfigMap
-    tools_data = []
-    for tool in tools:
-        tool_spec = tool.get("spec", {})
+    # Generate ConfigMap -- expand both single-tool and multi-tool MCPTool CRs
+    tools_data: list[dict[str, Any]] = []
+    for tool_cr in tools:
+        tool_spec = tool_cr.get("spec", {})
         service_ref = tool_spec.get("service", {})
 
-        svc_name = service_ref.get("name")
-        svc_port = service_ref.get("port")
-        svc_path = service_ref.get("path", "/")
-        svc_ns = service_ref.get("namespace") or namespace
-
-        if svc_name and svc_port:
-            base_endpoint = k8s.get_service_endpoint(svc_name, svc_ns, svc_port)
-            if base_endpoint:
-                endpoint = f"{base_endpoint}{svc_path}"
-                tools_data.append(
-                    {
-                        "name": tool_spec.get("name"),
-                        "endpoint": endpoint,
-                        "inputSchema": tool_spec.get("inputSchema"),
-                    }
+        if tool_spec.get("tools"):
+            # Multi-tool MCPTool: each entry becomes a separate ConfigMap tool
+            for tool_entry in tool_spec["tools"]:
+                entry = _resolve_tool_entry(
+                    tool_name=tool_entry.get("name"),
+                    service_ref={**service_ref, "path": tool_entry.get("path", "/")},
+                    input_schema=tool_entry.get("inputSchema"),
+                    namespace=namespace,
+                    k8s=k8s,
                 )
+                if entry:
+                    tools_data.append(entry)
+        else:
+            # Single-tool MCPTool (existing behavior)
+            entry = _resolve_tool_entry(
+                tool_name=tool_spec.get("name"),
+                service_ref=service_ref,
+                input_schema=tool_spec.get("inputSchema"),
+                namespace=namespace,
+                k8s=k8s,
+            )
+            if entry:
+                tools_data.append(entry)
+    tool_count = len(tools_data)
 
     prompts_data = []
     for prompt in prompts:
