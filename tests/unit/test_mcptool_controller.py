@@ -62,6 +62,41 @@ class TestMCPToolSpec:
         )
         assert spec.service.namespace == "other-ns"
 
+    def test_multi_tool_valid(self, sample_mcptool_spec_multi: dict[str, Any]) -> None:
+        """Test that a multi-tool spec is accepted."""
+        spec = MCPToolSpec(**sample_mcptool_spec_multi)
+        assert spec.tools is not None
+        assert len(spec.tools) == 2
+        assert spec.tools[0].name == "crane-images"
+        assert spec.tools[0].path == "/images"
+        assert spec.tools[1].name == "crane-inspect"
+        assert spec.name is None
+
+    def test_single_tool_still_works(self) -> None:
+        """Test that single-tool mode is backward compatible."""
+        spec = MCPToolSpec(
+            name="test-tool",
+            service={"name": "svc", "port": 8080},
+        )
+        assert spec.name == "test-tool"
+        assert spec.tools is None
+
+    def test_both_name_and_tools_raises(self) -> None:
+        """Test that providing both name and tools raises ValidationError."""
+        with pytest.raises(ValueError, match="Cannot specify both"):
+            MCPToolSpec(
+                name="test-tool",
+                service={"name": "svc", "port": 8080},
+                tools=[{"name": "tool-a", "path": "/a"}],
+            )
+
+    def test_neither_name_nor_tools_raises(self) -> None:
+        """Test that providing neither name nor tools raises ValidationError."""
+        with pytest.raises(ValueError, match="Must specify either"):
+            MCPToolSpec(
+                service={"name": "svc", "port": 8080},
+            )
+
 
 class TestMCPToolReconciliation:
     """Tests for MCPTool reconciliation logic."""
@@ -299,3 +334,57 @@ class TestMCPToolReconciliation:
             )
 
         mock_logger.info.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_reconcile_multi_tool_service_resolved(
+        self,
+        sample_mcptool_spec_multi: dict[str, Any],
+        mock_logger: MagicMock,
+    ) -> None:
+        """Test that multi-tool reconciliation resolves the base service endpoint."""
+        mock_k8s = MagicMock()
+        mock_k8s.get_service.return_value = {"metadata": {"name": "crane-tool-svc"}}
+        mock_k8s.get_service_endpoint.return_value = (
+            "http://crane-tool-svc.default.svc.cluster.local:8080"
+        )
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcptool_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcptool(
+                spec=sample_mcptool_spec_multi,
+                name="crane-tools",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+            )
+
+        assert mock_patch_obj.status["ready"] is True
+        # Multi-tool resolvedEndpoint is the base URL (no path suffix)
+        assert mock_patch_obj.status["resolvedEndpoint"] == (
+            "http://crane-tool-svc.default.svc.cluster.local:8080"
+        )
+
+    @pytest.mark.asyncio
+    async def test_reconcile_multi_tool_service_not_found(
+        self,
+        sample_mcptool_spec_multi: dict[str, Any],
+        mock_logger: MagicMock,
+    ) -> None:
+        """Test that multi-tool reconciliation sets ready=False when service missing."""
+        mock_k8s = MagicMock()
+        mock_k8s.get_service.return_value = None
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcptool_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcptool(
+                spec=sample_mcptool_spec_multi,
+                name="crane-tools",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+            )
+
+        assert mock_patch_obj.status["ready"] is False
+        assert mock_patch_obj.status["resolvedEndpoint"] is None
