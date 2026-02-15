@@ -20,6 +20,7 @@ from kubernetes import client
 
 from src.models.crds import MCPResourceSpec
 from src.utils.k8s_client import get_k8s_client
+from src.utils.metrics import RECONCILIATION_DURATION, RECONCILIATION_TOTAL
 
 
 def _create_condition(
@@ -71,6 +72,26 @@ async def reconcile_mcpresource(
     """
     logger.info(f"Reconciling MCPResource {namespace}/{name}")
 
+    with RECONCILIATION_DURATION.labels(controller="mcpresource").time():
+        try:
+            await _reconcile_mcpresource_inner(
+                spec=spec, name=name, namespace=namespace, logger=logger, patch=patch
+            )
+            RECONCILIATION_TOTAL.labels(controller="mcpresource", result="success").inc()
+        except Exception:
+            RECONCILIATION_TOTAL.labels(controller="mcpresource", result="error").inc()
+            raise
+
+
+async def _reconcile_mcpresource_inner(
+    *,
+    spec: dict[str, Any],
+    name: str,
+    namespace: str,
+    logger: kopf.Logger,
+    patch: kopf.Patch,
+) -> None:
+    """Inner reconciliation logic for MCPResource."""
     # Parse and validate spec
     resource_spec = MCPResourceSpec(**spec)
 

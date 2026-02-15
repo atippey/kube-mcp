@@ -22,5 +22,8 @@ COPY src/ ./src/
 RUN useradd --create-home --uid 1000 --user-group appuser
 USER appuser
 
-# kopf operator entrypoint
-ENTRYPOINT ["kopf", "run", "--standalone", "--all-namespaces", "src/main.py"]
+# Expose metrics and health ports
+EXPOSE 9090 8080
+
+# kopf operator entrypoint with health probe
+ENTRYPOINT ["kopf", "run", "--standalone", "--all-namespaces", "--liveness=http://0.0.0.0:8080/healthz", "src/main.py"]

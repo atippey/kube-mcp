@@ -16,6 +16,7 @@ from kubernetes import client
 
 from src.models.crds import MCPPromptSpec
 from src.utils.k8s_client import get_k8s_client
+from src.utils.metrics import RECONCILIATION_DURATION, RECONCILIATION_TOTAL
 
 
 def _create_condition(
@@ -82,6 +83,23 @@ async def reconcile_mcpprompt(
     """
     logger.info(f"Reconciling MCPPrompt {namespace}/{name}")
 
+    with RECONCILIATION_DURATION.labels(controller="mcpprompt").time():
+        try:
+            await _reconcile_mcpprompt_inner(spec=spec, name=name, logger=logger, patch=patch)
+            RECONCILIATION_TOTAL.labels(controller="mcpprompt", result="success").inc()
+        except Exception:
+            RECONCILIATION_TOTAL.labels(controller="mcpprompt", result="error").inc()
+            raise
+
+
+async def _reconcile_mcpprompt_inner(
+    *,
+    spec: dict[str, Any],
+    name: str,
+    logger: kopf.Logger,
+    patch: kopf.Patch,
+) -> None:
+    """Inner reconciliation logic for MCPPrompt."""
     # Parse and validate spec
     prompt_spec = MCPPromptSpec(**spec)
 

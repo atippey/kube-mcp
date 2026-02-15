@@ -127,20 +127,20 @@ def operator(setup_cluster):
     ]
 
     # Start the operator
+    # Use DEVNULL instead of PIPE to prevent deadlock when JSON logging
+    # fills the pipe buffer (64KB) and blocks the operator process.
     process = subprocess.Popen(
         cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         env=os.environ.copy(),  # Inherits KUBECONFIG
-        text=True,
     )
 
     # Give it a moment to start
     time.sleep(5)
 
     if process.poll() is not None:
-        stdout, stderr = process.communicate()
-        raise RuntimeError(f"Operator failed to start:\nSTDOUT: {stdout}\nSTDERR: {stderr}")
+        raise RuntimeError(f"Operator failed to start (exit code: {process.returncode})")
 
     yield process
 
