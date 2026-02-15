@@ -63,6 +63,9 @@ def _resolve_tool_entry(
     Returns:
         A dict with name, endpoint, inputSchema or None if unresolvable.
     """
+    if not tool_name:
+        return None
+
     svc_name = service_ref.get("name")
     svc_port = service_ref.get("port")
     svc_path = service_ref.get("path", "/")
@@ -202,8 +205,15 @@ async def _reconcile_mcpserver_inner(
         if tool_spec.get("tools"):
             # Multi-tool MCPTool: each entry becomes a separate ConfigMap tool
             for tool_entry in tool_spec["tools"]:
+                tool_name = tool_entry.get("name")
+                if not tool_name:
+                    logger.warning(
+                        "Skipping MCPTool entry with missing name in CR "
+                        f"{tool_cr.get('metadata', {}).get('name', '<unknown>')}"
+                    )
+                    continue
                 entry = _resolve_tool_entry(
-                    tool_name=tool_entry.get("name"),
+                    tool_name=tool_name,
                     service_ref={**service_ref, "path": tool_entry.get("path", "/")},
                     input_schema=tool_entry.get("inputSchema"),
                     namespace=namespace,

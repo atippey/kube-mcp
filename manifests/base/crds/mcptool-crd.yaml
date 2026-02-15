@@ -122,6 +122,11 @@ spec:
                           - PATCH
                         default: POST
                         description: HTTP method for tool invocation
+              oneOf:
+                - required:
+                    - name
+                - required:
+                    - tools
             status:
               type: object
               properties:
