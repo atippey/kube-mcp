@@ -29,9 +29,9 @@ Project is **75-80% production-ready** with solid fundamentals:
 
 ## Phase 3: Security
 
-- [ ] **Container scanning** - Add Trivy to CI workflow
-- [ ] **Dependency scanning** - Add Dependabot config (`.github/dependabot.yml`)
-- [ ] **NetworkPolicy** - Add manifest to restrict mcp-system traffic
+- [ ] **Container scanning** - Add Trivy to CI workflow _(Jules worker in progress)_
+- [ ] **Dependency scanning** - Add Dependabot config (`.github/dependabot.yml`) _(Jules worker in progress)_
+- [x] **NetworkPolicy** - Restrict mcp-system traffic: operator, Redis, and MCP server pods each get least-privilege ingress/egress rules
 - [ ] **SBOM generation** - Add to release workflow
 
 ---
@@ -93,15 +93,14 @@ Consolidated from Jules examples (time-tool PR #26, hash-tool PR #27, dns-tool P
 
 ### P0 — CRD Design
 
-- [ ] **Multi-tool support to reduce manifest boilerplate**
-  Two MCPTools pointing at the same Service share everything except `name`, `path`, `description`, and `inputSchema`. A `tools:` list inside MCPServer or a multi-tool MCPTool would cut YAML significantly. Currently ~200 lines of manifests for two HTTP endpoints.
-  _Source: crane-tool_
+- [x] **Multi-tool support to reduce manifest boilerplate** _(merged PR #35)_
+  MCPTool now supports `spec.tools[]` array for multiple tool definitions sharing one service.
+  CRD enforces `oneOf` (name vs tools). MCPServer controller expands multi-tool CRs into individual ConfigMap entries.
 
 ### P1 — Developer Experience
 
-- [ ] **Scaffold generator for new tools**
-  Create a CLI or script (`mcp-cli create tool <name>`) that generates boilerplate: `main.go`, `go.mod`, `Dockerfile`, `manifests/base/*`, `manifests/overlays/k3d/*`, MCPServer + MCPTool CRDs.
-  _Sources: hash-tool, dns-tool_
+- [x] **Scaffold generator for new tools** _(merged PR #31)_
+  `scripts/scaffold-tool.sh` generates Go boilerplate, Dockerfile, Kustomize manifests, and MCPTool CRD.
 
 - [ ] **Getting-started guide for tool authors**
   Document end-to-end flow from "I have an HTTP server" to "it's a registered MCP tool in the cluster". Include module naming conventions, Go version expectations, manifest structure.
@@ -113,9 +112,8 @@ Consolidated from Jules examples (time-tool PR #26, hash-tool PR #27, dns-tool P
   The k3d overlay only rewrites the image tag. Explore Makefile target, skaffold profile, or convention-based approach to make local dev zero-config.
   _Sources: time-tool, hash-tool_
 
-- [ ] **Standardize example structure**
+- [ ] **Standardize example structure** _(Jules worker in progress)_
   Enforce consistent naming: module names, resource filenames (`example-resources.yaml`), Go versions, Dockerfile base images. Consider CI lint check.
-  _Partially addressed in hash-tool and dns-tool PRs_
 
 ### P3 — Nice to Have
 
