@@ -30,6 +30,11 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: 1Gi
+  # Restrictive MCP server ingress — only labeled namespaces
+  - target:
+      kind: NetworkPolicy
+      name: mcp-server-policy
+    path: network-policy-patch.yaml
   # Production Redis with more resources
   - target:
       kind: Deployment

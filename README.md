@@ -136,6 +136,16 @@ make kustomize-k3d
 make kustomize-prod
 ```
 
+### Cross-Namespace MCPServer Option
+
+By default, the Redis NetworkPolicy allows MCP server pods in `mcp-system`.
+To allow MCP server pods from another namespace to connect to Redis, add this label
+to that namespace:
+
+```bash
+kubectl label namespace <namespace> mcp.k8s.turd.ninja/allow-redis-access=true
+```
+
 ## Architecture
 
 ```

@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mcp-server-policy
+  namespace: mcp-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Production: only ingress controller and explicitly labeled namespaces
+    - from:
+        # Ingress controller namespace (label your ingress-nginx/traefik namespace)
+        - namespaceSelector:
+            matchLabels:
+              mcp.k8s.turd.ninja/allow-mcp-ingress: "true"
+        # Namespaces explicitly opted in for direct MCP server access
+        - namespaceSelector:
+            matchLabels:
+              mcp.k8s.turd.ninja/allow-mcp-access: "true"
+      ports:
+        - port: 8080
+          protocol: TCP

@@ -69,13 +69,20 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Only operator and MCP server pods can reach Redis
+    # Default: operator and MCP server pods in mcp-system can reach Redis.
+    # Optional: MCP server pods from labeled namespaces can also connect.
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mcp-operator
               app.kubernetes.io/component: operator
         - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mcp-server
+        - namespaceSelector:
+            matchLabels:
+              mcp.k8s.turd.ninja/allow-redis-access: "true"
+          podSelector:
             matchLabels:
               app.kubernetes.io/name: mcp-server
       ports:
@@ -98,7 +105,8 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # External traffic via Ingress controller or direct service access
+    # Dev/k3d: permissive — any pod in the cluster can reach MCP server.
+    # Production overlay restricts this to ingress-controller + labeled namespaces.
     - ports:
         - port: 8080
           protocol: TCP
