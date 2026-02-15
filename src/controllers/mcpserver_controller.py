@@ -8,6 +8,7 @@ Handles reconciliation of MCPServer resources. Responsible for:
 """
 
 import json
+import os
 from datetime import UTC, datetime
 from ipaddress import ip_network
 from typing import Any
@@ -21,6 +22,9 @@ from src.utils.metrics import MANAGED_RESOURCES, RECONCILIATION_DURATION, RECONC
 EGRESS_MODE_ANNOTATION = "mcp.k8s.turd.ninja/egress-mode"
 EGRESS_PORTS_ANNOTATION = "mcp.k8s.turd.ninja/egress-ports"
 EGRESS_CIDRS_ANNOTATION = "mcp.k8s.turd.ninja/egress-cidrs"
+OPERATOR_API_SERVER_CIDR_ENV = "MCP_OPERATOR_API_SERVER_CIDR"
+DEFAULT_OPERATOR_API_SERVER_CIDR = "0.0.0.0/0"
+DEFAULT_OPERATOR_NAMESPACE = "mcp-system"
 
 
 def _create_condition(
@@ -352,6 +356,112 @@ def _build_server_networkpolicy(
     }
 
 
+def _resolve_operator_api_server_cidr(k8s: Any, logger: kopf.Logger) -> str:
+    """Resolve operator API server egress CIDR from env override or auto-detect."""
+    configured = os.getenv(OPERATOR_API_SERVER_CIDR_ENV)
+    if configured:
+        try:
+            normalized = str(ip_network(configured.strip(), strict=False))
+            logger.info(f"Using API server CIDR from {OPERATOR_API_SERVER_CIDR_ENV}: {normalized}")
+            return normalized
+        except ValueError:
+            logger.warning(
+                f"Ignoring invalid {OPERATOR_API_SERVER_CIDR_ENV} value: {configured!r}; "
+                "falling back to auto-detect"
+            )
+
+    detected = k8s.get_api_server_cidr()
+    if isinstance(detected, str) and detected.strip():
+        try:
+            normalized = str(ip_network(detected.strip(), strict=False))
+            logger.info(f"Detected API server CIDR from kubernetes endpoints: {normalized}")
+            return normalized
+        except ValueError:
+            logger.warning(f"Ignoring invalid detected API server CIDR: {detected!r}")
+
+    logger.warning(
+        "Falling back to broad API server CIDR allowlist "
+        f"{DEFAULT_OPERATOR_API_SERVER_CIDR}; set {OPERATOR_API_SERVER_CIDR_ENV} to harden"
+    )
+    return DEFAULT_OPERATOR_API_SERVER_CIDR
+
+
+def _build_operator_networkpolicy(namespace: str, api_server_cidr: str) -> dict[str, Any]:
+    """Build operator NetworkPolicy with API-server egress pinned to resolved CIDR."""
+    return {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {"name": "mcp-operator-policy", "namespace": namespace},
+        "spec": {
+            "podSelector": {
+                "matchLabels": {
+                    "app.kubernetes.io/name": "mcp-operator",
+                    "app.kubernetes.io/component": "operator",
+                }
+            },
+            "policyTypes": ["Ingress", "Egress"],
+            "ingress": [
+                {
+                    "ports": [
+                        {"port": 8080, "protocol": "TCP"},
+                        {"port": 9090, "protocol": "TCP"},
+                    ]
+                }
+            ],
+            "egress": [
+                {
+                    "to": [
+                        {
+                            "podSelector": {
+                                "matchLabels": {
+                                    "app.kubernetes.io/name": "mcp-redis",
+                                    "app.kubernetes.io/component": "cache",
+                                }
+                            }
+                        }
+                    ],
+                    "ports": [{"port": 6379, "protocol": "TCP"}],
+                },
+                {
+                    "to": [{"ipBlock": {"cidr": api_server_cidr}}],
+                    "ports": [
+                        {"port": 443, "protocol": "TCP"},
+                        {"port": 6443, "protocol": "TCP"},
+                    ],
+                },
+                {
+                    "to": [
+                        {
+                            "namespaceSelector": {},
+                            "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}},
+                        }
+                    ],
+                    "ports": [
+                        {"port": 53, "protocol": "UDP"},
+                        {"port": 53, "protocol": "TCP"},
+                    ],
+                },
+            ],
+        },
+    }
+
+
+def _reconcile_operator_networkpolicy(k8s: Any, logger: kopf.Logger) -> None:
+    """Reconcile shared operator NetworkPolicy with resolved API server CIDR."""
+    operator_namespace = os.getenv("NAMESPACE", DEFAULT_OPERATOR_NAMESPACE)
+    api_server_cidr = _resolve_operator_api_server_cidr(k8s, logger)
+    operator_netpol = _build_operator_networkpolicy(operator_namespace, api_server_cidr)
+    k8s.create_or_update_networkpolicy(
+        name="mcp-operator-policy",
+        namespace=operator_namespace,
+        body=operator_netpol,
+    )
+    logger.info(
+        f"Updated NetworkPolicy mcp-operator-policy in {operator_namespace} "
+        f"with API egress CIDR {api_server_cidr}"
+    )
+
+
 def _selector_to_dict(selector: Any) -> dict[str, Any]:
     """Convert a LabelSelector model to a dict.
 
@@ -430,6 +540,7 @@ async def _reconcile_mcpserver_inner(
 
     # Get K8s client
     k8s = get_k8s_client()
+    _reconcile_operator_networkpolicy(k8s, logger)
 
     # Convert tool selector to dict for API calls
     selector_dict = _selector_to_dict(server_spec.toolSelector)

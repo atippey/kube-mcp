@@ -147,6 +147,10 @@ kubectl label namespace <namespace> mcp.k8s.turd.ninja/allow-cross-namespace=tru
 
 The k3d overlay opens MCP server ingress to all pods for local development.
 
+Operator API-server egress is reconciled automatically from `Endpoints/kubernetes`.
+To pin it explicitly, set `MCP_OPERATOR_API_SERVER_CIDR` on the operator Deployment
+(for example: `192.168.0.10/32`).
+
 For selectorless backends (including `ExternalName` Services), add egress hints
 on the `MCPTool` or `MCPResource`:
 

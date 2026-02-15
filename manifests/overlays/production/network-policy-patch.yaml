@@ -27,12 +27,12 @@ spec:
       ports:
         - port: 6379
           protocol: TCP
-    # Kubernetes API server — pin to cluster API CIDR
-    # Override this value with the actual API server IP/CIDR for your cluster.
-    # Example: kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].addresses[0].ip}'
+    # Kubernetes API server egress defaults broad here so startup is safe.
+    # Controller reconciliation narrows this automatically from Endpoints/kubernetes,
+    # or from MCP_OPERATOR_API_SERVER_CIDR when set.
     - to:
         - ipBlock:
-            cidr: 10.0.0.0/8
+            cidr: 0.0.0.0/0
       ports:
         - port: 443
           protocol: TCP

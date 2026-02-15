@@ -960,9 +960,14 @@ class TestMCPServerNetworkPolicyGeneration:
                 body=sample_body,
             )
 
-        mock_k8s.create_or_update_networkpolicy.assert_called_once()
-        call_args = mock_k8s.create_or_update_networkpolicy.call_args
-        assert call_args.kwargs["name"] == "mcp-server-test-server-egress"
+        assert mock_k8s.create_or_update_networkpolicy.call_count == 2
+        server_calls = [
+            call
+            for call in mock_k8s.create_or_update_networkpolicy.call_args_list
+            if call.kwargs.get("name") == "mcp-server-test-server-egress"
+        ]
+        assert len(server_calls) == 1
+        call_args = server_calls[0]
 
         netpol_body = call_args.kwargs["body"]
         egress = netpol_body["spec"]["egress"]
@@ -1382,3 +1387,107 @@ class TestMCPServerNetworkPolicyGeneration:
             {"port": 443, "protocol": "TCP"},
             {"port": 8443, "protocol": "TCP"},
         ]
+
+    @pytest.mark.asyncio
+    async def test_reconcile_operator_networkpolicy_uses_detected_api_cidr(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Operator policy should use detected API server CIDR by default."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_api_server_cidr.return_value = "10.43.0.1/32"
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        operator_calls = [
+            call
+            for call in mock_k8s.create_or_update_networkpolicy.call_args_list
+            if call.kwargs.get("name") == "mcp-operator-policy"
+        ]
+        assert len(operator_calls) == 1
+        operator_egress = operator_calls[0].kwargs["body"]["spec"]["egress"]
+        assert operator_egress[1]["to"] == [{"ipBlock": {"cidr": "10.43.0.1/32"}}]
+
+    @pytest.mark.asyncio
+    async def test_reconcile_operator_networkpolicy_uses_env_override(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Env override should take precedence over auto-detection."""
+        monkeypatch.setenv("MCP_OPERATOR_API_SERVER_CIDR", "192.168.0.10/32")
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_api_server_cidr.return_value = "10.43.0.1/32"
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        operator_calls = [
+            call
+            for call in mock_k8s.create_or_update_networkpolicy.call_args_list
+            if call.kwargs.get("name") == "mcp-operator-policy"
+        ]
+        assert len(operator_calls) == 1
+        operator_egress = operator_calls[0].kwargs["body"]["spec"]["egress"]
+        assert operator_egress[1]["to"] == [{"ipBlock": {"cidr": "192.168.0.10/32"}}]
+
+    @pytest.mark.asyncio
+    async def test_reconcile_operator_networkpolicy_falls_back_to_broad_cidr(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """If detection fails, operator policy should fall back to 0.0.0.0/0."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_api_server_cidr.return_value = None
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        operator_calls = [
+            call
+            for call in mock_k8s.create_or_update_networkpolicy.call_args_list
+            if call.kwargs.get("name") == "mcp-operator-policy"
+        ]
+        assert len(operator_calls) == 1
+        operator_egress = operator_calls[0].kwargs["body"]["spec"]["egress"]
+        assert operator_egress[1]["to"] == [{"ipBlock": {"cidr": "0.0.0.0/0"}}]
