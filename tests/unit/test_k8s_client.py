@@ -586,6 +586,203 @@ class TestGetK8sClient:
             assert client is client2
 
 
+class TestK8sClientCreateOrUpdateNetworkPolicy:
+    """Tests for K8sClient.create_or_update_networkpolicy."""
+
+    def test_create_networkpolicy_if_not_exists(self) -> None:
+        """Test creating network policy when it doesn't exist."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        mock_netpol = MagicMock()
+        mock_netpol.to_dict.return_value = {"metadata": {"name": "test-netpol"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api") as mock_networking_v1,
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_networking_v1.return_value.patch_namespaced_network_policy.side_effect = (
+                ApiException(status=404)
+            )
+            mock_networking_v1.return_value.create_namespaced_network_policy.return_value = (
+                mock_netpol
+            )
+
+            k8s = K8sClient()
+            body = {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy"}
+            result = k8s.create_or_update_networkpolicy("test-netpol", "default", body)
+
+            assert result == {"metadata": {"name": "test-netpol"}}
+            mock_networking_v1.return_value.patch_namespaced_network_policy.assert_called_once()
+            mock_networking_v1.return_value.create_namespaced_network_policy.assert_called_once()
+
+    def test_update_networkpolicy_if_exists(self) -> None:
+        """Test updating network policy when it exists."""
+        from kubernetes.config import ConfigException
+
+        mock_netpol = MagicMock()
+        mock_netpol.to_dict.return_value = {"metadata": {"name": "test-netpol"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api") as mock_networking_v1,
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_networking_v1.return_value.patch_namespaced_network_policy.return_value = (
+                mock_netpol
+            )
+
+            k8s = K8sClient()
+            body = {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy"}
+            result = k8s.create_or_update_networkpolicy("test-netpol", "default", body)
+
+            assert result == {"metadata": {"name": "test-netpol"}}
+            mock_networking_v1.return_value.patch_namespaced_network_policy.assert_called_once()
+            mock_networking_v1.return_value.create_namespaced_network_policy.assert_not_called()
+
+    def test_create_networkpolicy_with_owner_reference(self) -> None:
+        """Test creating network policy with owner reference."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        mock_netpol = MagicMock()
+        mock_netpol.to_dict.return_value = {"metadata": {"name": "test-netpol"}}
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api") as mock_networking_v1,
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_networking_v1.return_value.patch_namespaced_network_policy.side_effect = (
+                ApiException(status=404)
+            )
+            mock_networking_v1.return_value.create_namespaced_network_policy.return_value = (
+                mock_netpol
+            )
+
+            owner_ref = {
+                "apiVersion": "mcp.k8s.turd.ninja/v1alpha1",
+                "kind": "MCPServer",
+                "name": "test-server",
+                "uid": "uid-123",
+            }
+
+            k8s = K8sClient()
+            body: dict = {"metadata": {"name": "test-netpol"}}
+            k8s.create_or_update_networkpolicy("test-netpol", "default", body, owner_ref)
+
+            # Verify owner reference was injected into body
+            assert "ownerReferences" in body["metadata"]
+            assert body["metadata"]["ownerReferences"][0]["name"] == "test-server"
+            assert body["metadata"]["ownerReferences"][0]["uid"] == "uid-123"
+
+    def test_create_networkpolicy_raises_on_other_error(self) -> None:
+        """Test that other exceptions are raised."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api"),
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api") as mock_networking_v1,
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_networking_v1.return_value.patch_namespaced_network_policy.side_effect = (
+                ApiException(status=500)
+            )
+
+            k8s = K8sClient()
+            body = {"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy"}
+            try:
+                k8s.create_or_update_networkpolicy("test-netpol", "default", body)
+                raise AssertionError("Should have raised ApiException")
+            except ApiException as e:
+                assert e.status == 500
+
+
+class TestK8sClientGetApiServerCidr:
+    """Tests for K8sClient.get_api_server_cidr."""
+
+    def test_get_api_server_cidr_returns_cidr(self) -> None:
+        """Test that API server CIDR is detected from endpoints."""
+        from kubernetes.config import ConfigException
+
+        mock_endpoints = MagicMock()
+        mock_endpoints.subsets = [MagicMock()]
+        mock_endpoints.subsets[0].addresses = [MagicMock()]
+        mock_endpoints.subsets[0].addresses[0].ip = "10.43.0.1"
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api") as mock_core_v1,
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_core_v1.return_value.read_namespaced_endpoints.return_value = mock_endpoints
+
+            k8s = K8sClient()
+            result = k8s.get_api_server_cidr()
+
+            assert result == "10.43.0.1/32"
+            mock_core_v1.return_value.read_namespaced_endpoints.assert_called_once_with(
+                "kubernetes", "default"
+            )
+
+    def test_get_api_server_cidr_returns_none_on_error(self) -> None:
+        """Test that None is returned when detection fails."""
+        from kubernetes.client.exceptions import ApiException
+        from kubernetes.config import ConfigException
+
+        with (
+            patch(
+                "src.utils.k8s_client.config.load_incluster_config",
+                side_effect=ConfigException("Not in cluster"),
+            ),
+            patch("src.utils.k8s_client.config.load_kube_config"),
+            patch("src.utils.k8s_client.client.CoreV1Api") as mock_core_v1,
+            patch("src.utils.k8s_client.client.AppsV1Api"),
+            patch("src.utils.k8s_client.client.NetworkingV1Api"),
+            patch("src.utils.k8s_client.client.CustomObjectsApi"),
+        ):
+            mock_core_v1.return_value.read_namespaced_endpoints.side_effect = ApiException(
+                status=403
+            )
+
+            k8s = K8sClient()
+            result = k8s.get_api_server_cidr()
+
+            assert result is None
+
+
 class TestK8sClientCreateOrUpdateIngress:
     """Tests for K8sClient.create_or_update_ingress."""
 

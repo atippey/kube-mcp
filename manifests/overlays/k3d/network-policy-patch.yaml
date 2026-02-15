@@ -9,33 +9,10 @@ spec:
       app.kubernetes.io/name: mcp-server
   policyTypes:
     - Ingress
-    - Egress
   ingress:
     # Dev/k3d: permissive — any pod in the cluster can reach MCP server
     - ports:
         - port: 8080
           protocol: TCP
-  egress:
-    # Redis (same namespace)
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: mcp-redis
-              app.kubernetes.io/component: cache
-      ports:
-        - port: 6379
-          protocol: TCP
-    # Tool backing services — any namespace, any port
-    - to:
-        - namespaceSelector: {}
-    # DNS resolution
-    - to:
-        - namespaceSelector: {}
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-      ports:
-        - port: 53
-          protocol: UDP
-        - port: 53
-          protocol: TCP
+  # Egress is managed by the MCPServer controller (per-server NetworkPolicy
+  # generated during reconciliation with precise per-service rules).

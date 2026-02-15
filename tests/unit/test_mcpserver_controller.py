@@ -857,3 +857,268 @@ class TestMCPServerMultiToolExpansion:
 
         # 1 MCPTool CR with 3 tools = toolCount should be 3
         assert mock_patch_obj.status["toolCount"] == 3
+
+
+class TestMCPServerNetworkPolicyGeneration:
+    """Tests for controller-managed egress NetworkPolicy generation."""
+
+    @pytest.fixture
+    def mock_logger(self) -> MagicMock:
+        """Create a mock logger."""
+        return MagicMock()
+
+    @pytest.fixture(autouse=True)
+    def mock_adopt(self) -> MagicMock:
+        """Mock kopf.adopt for all tests in this class."""
+        with patch("src.controllers.mcpserver_controller.kopf.adopt") as mock:
+            yield mock
+
+    @pytest.fixture
+    def sample_body(self) -> dict[str, Any]:
+        """Create a sample resource body."""
+        return {
+            "metadata": {
+                "name": "test-server",
+                "namespace": "default",
+                "uid": "test-uid-789",
+            }
+        }
+
+    def _make_tool_cr(
+        self,
+        name: str,
+        svc_name: str,
+        svc_port: int = 8080,
+        svc_namespace: str | None = None,
+    ) -> dict[str, Any]:
+        """Helper to create a tool CR dict."""
+        service: dict[str, Any] = {"name": svc_name, "port": svc_port}
+        if svc_namespace:
+            service["namespace"] = svc_namespace
+        return {
+            "metadata": {"name": name, "namespace": "default"},
+            "spec": {"name": name, "service": service},
+        }
+
+    def _make_service_dict(self, selector: dict[str, str]) -> dict[str, Any]:
+        """Helper to create a service dict returned by get_service."""
+        return {"spec": {"selector": selector}}
+
+    @pytest.mark.asyncio
+    async def test_reconcile_creates_networkpolicy_with_tool_services(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that NetworkPolicy is created with egress rules for tool services."""
+        tool1 = self._make_tool_cr("tool1", "svc1")
+        tool2 = self._make_tool_cr("tool2", "svc2")
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[tool1, tool2], [], []]
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+        mock_k8s.get_service.side_effect = lambda name, ns: self._make_service_dict({"app": name})
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        mock_k8s.create_or_update_networkpolicy.assert_called_once()
+        call_args = mock_k8s.create_or_update_networkpolicy.call_args
+        assert call_args.kwargs["name"] == "mcp-server-test-server-egress"
+
+        netpol_body = call_args.kwargs["body"]
+        egress = netpol_body["spec"]["egress"]
+        # Redis + DNS + 2 tool services = 4 rules
+        assert len(egress) == 4
+
+    @pytest.mark.asyncio
+    async def test_reconcile_networkpolicy_deduplicates_services(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that duplicate service references produce only one egress rule."""
+        # Two tools pointing at the same service
+        tool1 = self._make_tool_cr("tool1", "shared-svc")
+        tool2 = self._make_tool_cr("tool2", "shared-svc")
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[tool1, tool2], [], []]
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+        mock_k8s.get_service.side_effect = lambda name, ns: self._make_service_dict({"app": name})
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        call_args = mock_k8s.create_or_update_networkpolicy.call_args
+        netpol_body = call_args.kwargs["body"]
+        egress = netpol_body["spec"]["egress"]
+        # Redis + DNS + 1 deduplicated service = 3 rules
+        assert len(egress) == 3
+
+    @pytest.mark.asyncio
+    async def test_reconcile_networkpolicy_uses_service_pod_selector(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that egress rules use the Service's spec.selector as podSelector."""
+        tool1 = self._make_tool_cr("tool1", "my-svc")
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+        mock_k8s.get_service.return_value = self._make_service_dict(
+            {"app.kubernetes.io/name": "my-tool", "version": "v1"}
+        )
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        call_args = mock_k8s.create_or_update_networkpolicy.call_args
+        netpol_body = call_args.kwargs["body"]
+        # The service rule is the 3rd egress rule (after Redis and DNS)
+        svc_rule = netpol_body["spec"]["egress"][2]
+        pod_selector = svc_rule["to"][0]["podSelector"]["matchLabels"]
+        assert pod_selector == {"app.kubernetes.io/name": "my-tool", "version": "v1"}
+
+    @pytest.mark.asyncio
+    async def test_reconcile_networkpolicy_has_owner_reference(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that the generated NetworkPolicy has an owner reference."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        call_args = mock_k8s.create_or_update_networkpolicy.call_args
+        owner_ref = call_args.kwargs["owner_reference"]
+        assert owner_ref["name"] == "test-server"
+        assert owner_ref["uid"] == "test-uid-789"
+        assert owner_ref["controller"] is True
+
+    @pytest.mark.asyncio
+    async def test_reconcile_networkpolicy_with_cross_namespace_service(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that cross-namespace service produces correct namespaceSelector."""
+        tool1 = self._make_tool_cr("tool1", "remote-svc", svc_namespace="other-ns")
+
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
+        mock_k8s.get_service_endpoint.side_effect = (
+            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        )
+        mock_k8s.get_service.return_value = self._make_service_dict({"app": "remote"})
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        call_args = mock_k8s.create_or_update_networkpolicy.call_args
+        netpol_body = call_args.kwargs["body"]
+        svc_rule = netpol_body["spec"]["egress"][2]
+        ns_selector = svc_rule["to"][0]["namespaceSelector"]["matchLabels"]
+        assert ns_selector == {"kubernetes.io/metadata.name": "other-ns"}
+
+    @pytest.mark.asyncio
+    async def test_reconcile_networkpolicy_with_no_tools(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that NetworkPolicy with no tools has only Redis + DNS rules."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        call_args = mock_k8s.create_or_update_networkpolicy.call_args
+        netpol_body = call_args.kwargs["body"]
+        egress = netpol_body["spec"]["egress"]
+        # Redis + DNS only = 2 rules
+        assert len(egress) == 2
+        # Verify pod selector targets the right server
+        pod_selector = netpol_body["spec"]["podSelector"]["matchLabels"]
+        assert pod_selector == {
+            "app.kubernetes.io/name": "mcp-server",
+            "app.kubernetes.io/instance": "test-server",
+        }

@@ -82,6 +82,144 @@ def _resolve_tool_entry(
     return None
 
 
+def _collect_service_targets(
+    tools: list[dict[str, Any]],
+    namespace: str,
+    k8s: Any,
+) -> list[dict[str, Any]]:
+    """Collect unique service targets from tool CRs for NetworkPolicy generation.
+
+    Deduplicates by (namespace, name, port) and looks up each Service's pod
+    selector for precise egress rules.
+
+    Args:
+        tools: List of MCPTool custom resource dicts.
+        namespace: Default namespace if not specified in service ref.
+        k8s: The Kubernetes client.
+
+    Returns:
+        List of dicts with namespace, selector, and port keys.
+    """
+    seen: set[tuple[str, str, int]] = set()
+    targets: list[dict[str, Any]] = []
+
+    for tool_cr in tools:
+        tool_spec = tool_cr.get("spec", {})
+        service_ref = tool_spec.get("service", {})
+        svc_name = service_ref.get("name")
+        svc_ns = service_ref.get("namespace") or namespace
+        svc_port = service_ref.get("port")
+
+        if not svc_name or not svc_port:
+            continue
+
+        key = (svc_ns, svc_name, svc_port)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        svc = k8s.get_service(svc_name, svc_ns)
+        if svc:
+            targets.append(
+                {
+                    "namespace": svc_ns,
+                    "selector": svc.get("spec", {}).get("selector", {}),
+                    "port": svc_port,
+                }
+            )
+
+    return targets
+
+
+def _build_server_networkpolicy(
+    name: str,
+    namespace: str,
+    server_name: str,
+    service_targets: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build an egress NetworkPolicy for MCP server pods.
+
+    Generates precise egress rules for Redis, DNS, and each discovered
+    tool service (by namespace + pod selector).
+
+    Args:
+        name: The NetworkPolicy name.
+        namespace: The NetworkPolicy namespace.
+        server_name: The MCPServer name (for pod selector).
+        service_targets: List of service target dicts from _collect_service_targets.
+
+    Returns:
+        A NetworkPolicy body dict.
+    """
+    egress_rules: list[dict[str, Any]] = []
+
+    # Redis (same namespace)
+    egress_rules.append(
+        {
+            "to": [
+                {
+                    "podSelector": {
+                        "matchLabels": {
+                            "app.kubernetes.io/name": "mcp-redis",
+                            "app.kubernetes.io/component": "cache",
+                        }
+                    }
+                }
+            ],
+            "ports": [{"port": 6379, "protocol": "TCP"}],
+        }
+    )
+
+    # DNS resolution
+    egress_rules.append(
+        {
+            "to": [
+                {
+                    "namespaceSelector": {},
+                    "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}},
+                }
+            ],
+            "ports": [
+                {"port": 53, "protocol": "UDP"},
+                {"port": 53, "protocol": "TCP"},
+            ],
+        }
+    )
+
+    # Per-tool-service egress (precise namespace + pod selector)
+    for target in service_targets:
+        rule: dict[str, Any] = {
+            "to": [
+                {
+                    "namespaceSelector": {
+                        "matchLabels": {
+                            "kubernetes.io/metadata.name": target["namespace"],
+                        }
+                    },
+                    "podSelector": {"matchLabels": target["selector"]},
+                }
+            ],
+            "ports": [{"port": target["port"], "protocol": "TCP"}],
+        }
+        egress_rules.append(rule)
+
+    return {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {"name": name, "namespace": namespace},
+        "spec": {
+            "podSelector": {
+                "matchLabels": {
+                    "app.kubernetes.io/name": "mcp-server",
+                    "app.kubernetes.io/instance": server_name,
+                }
+            },
+            "policyTypes": ["Egress"],
+            "egress": egress_rules,
+        },
+    }
+
+
 def _selector_to_dict(selector: Any) -> dict[str, Any]:
     """Convert a LabelSelector model to a dict.
 
@@ -277,6 +415,25 @@ async def _reconcile_mcpserver_inner(
         owner_reference=owner_ref,
     )
     logger.info(f"Updated ConfigMap {config_map_name}")
+
+    # Generate egress NetworkPolicy from discovered tool services
+    service_targets = _collect_service_targets(tools, namespace, k8s)
+    netpol_name = f"mcp-server-{name}-egress"
+    netpol_body = _build_server_networkpolicy(
+        name=netpol_name,
+        namespace=namespace,
+        server_name=name,
+        service_targets=service_targets,
+    )
+    k8s.create_or_update_networkpolicy(
+        name=netpol_name,
+        namespace=namespace,
+        body=netpol_body,
+        owner_reference=owner_ref,
+    )
+    logger.info(
+        f"Updated NetworkPolicy {netpol_name} with {len(service_targets)} service target(s)"
+    )
 
     # Create Ingress if configured
     if server_spec.ingress:

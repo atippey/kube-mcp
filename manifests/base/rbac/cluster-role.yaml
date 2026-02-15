@@ -40,7 +40,14 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources:
       - ingresses
+      - networkpolicies
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Endpoints (for API server CIDR auto-detection)
+  - apiGroups: [""]
+    resources:
+      - endpoints
+    verbs: ["get", "list"]
 
   # Events for status reporting
   - apiGroups: [""]
