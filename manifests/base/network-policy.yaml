@@ -22,7 +22,7 @@ spec:
         - port: 9090
           protocol: TCP
   egress:
-    # Redis
+    # Redis (same namespace)
     - to:
         - podSelector:
             matchLabels:
@@ -31,7 +31,7 @@ spec:
       ports:
         - port: 6379
           protocol: TCP
-    # Kubernetes API server
+    # Kubernetes API server — broad by default, pin in production overlay
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -69,8 +69,7 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Default: operator and MCP server pods in mcp-system can reach Redis.
-    # Optional: MCP server pods from labeled namespaces can also connect.
+    # Operator and MCP server pods in mcp-system
     - from:
         - podSelector:
             matchLabels:
@@ -79,9 +78,10 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: mcp-server
+        # Cross-namespace: MCP server pods from labeled namespaces
         - namespaceSelector:
             matchLabels:
-              mcp.k8s.turd.ninja/allow-redis-access: "true"
+              mcp.k8s.turd.ninja/allow-cross-namespace: "true"
           podSelector:
             matchLabels:
               app.kubernetes.io/name: mcp-server
@@ -105,13 +105,17 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Dev/k3d: permissive — any pod in the cluster can reach MCP server.
-    # Production overlay restricts this to ingress-controller + labeled namespaces.
-    - ports:
+    # Restrictive by default: only labeled namespaces can reach MCP server.
+    # Dev/k3d overlays patch this to be permissive.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              mcp.k8s.turd.ninja/allow-cross-namespace: "true"
+      ports:
         - port: 8080
           protocol: TCP
   egress:
-    # Redis
+    # Redis (same namespace)
     - to:
         - podSelector:
             matchLabels:

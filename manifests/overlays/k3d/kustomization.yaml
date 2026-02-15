@@ -12,6 +12,11 @@ images:
     newTag: latest
 
 patches:
+  # Permissive MCP server ingress for local dev (base is restrictive)
+  - target:
+      kind: NetworkPolicy
+      name: mcp-server-policy
+    path: network-policy-patch.yaml
   # Use lower resource limits for k3d
   - target:
       kind: Deployment

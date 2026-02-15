@@ -1,21 +1,19 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: mcp-operator-policy
+  name: mcp-server-policy
   namespace: mcp-system
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: mcp-operator
-      app.kubernetes.io/component: operator
+      app.kubernetes.io/name: mcp-server
   policyTypes:
     - Ingress
     - Egress
   ingress:
+    # Dev/k3d: permissive — any pod in the cluster can reach MCP server
     - ports:
         - port: 8080
-          protocol: TCP
-        - port: 9090
           protocol: TCP
   egress:
     # Redis (same namespace)
@@ -27,17 +25,9 @@ spec:
       ports:
         - port: 6379
           protocol: TCP
-    # Kubernetes API server — pin to cluster API CIDR
-    # Override this value with the actual API server IP/CIDR for your cluster.
-    # Example: kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].addresses[0].ip}'
+    # Tool backing services — any namespace, any port
     - to:
-        - ipBlock:
-            cidr: 10.0.0.0/8
-      ports:
-        - port: 443
-          protocol: TCP
-        - port: 6443
-          protocol: TCP
+        - namespaceSelector: {}
     # DNS resolution
     - to:
         - namespaceSelector: {}
