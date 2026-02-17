@@ -564,8 +564,8 @@ class TestMCPServerReconciliation:
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [mock_tools, mock_prompts, mock_resources]
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
 
         mock_patch_obj = MagicMock()
@@ -733,8 +733,8 @@ class TestMCPServerMultiToolExpansion:
             [],
             [],
         ]
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
         mock_patch_obj = MagicMock()
@@ -792,8 +792,8 @@ class TestMCPServerMultiToolExpansion:
             [],
             [],
         ]
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
         mock_patch_obj = MagicMock()
@@ -942,8 +942,8 @@ class TestMCPServerNetworkPolicyGeneration:
 
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[tool1, tool2], [], []]
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
         mock_k8s.get_service.side_effect = lambda name, ns: self._make_service_dict({"app": name})
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
@@ -988,8 +988,8 @@ class TestMCPServerNetworkPolicyGeneration:
 
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[tool1, tool2], [], []]
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
         mock_k8s.get_service.side_effect = lambda name, ns: self._make_service_dict({"app": name})
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
@@ -1024,8 +1024,8 @@ class TestMCPServerNetworkPolicyGeneration:
 
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
         mock_k8s.get_service.return_value = self._make_service_dict(
             {"app.kubernetes.io/name": "my-tool", "version": "v1"}
@@ -1093,8 +1093,8 @@ class TestMCPServerNetworkPolicyGeneration:
 
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
         mock_k8s.get_service.return_value = self._make_service_dict({"app": "remote"})
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
@@ -1166,8 +1166,8 @@ class TestMCPServerNetworkPolicyGeneration:
 
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[tool1], [], [resource1]]
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
         mock_k8s.get_service.side_effect = lambda name, ns: self._make_service_dict({"app": name})
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
@@ -1201,8 +1201,8 @@ class TestMCPServerNetworkPolicyGeneration:
 
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
         mock_k8s.get_service.return_value = self._make_service_dict(None)
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
@@ -1238,8 +1238,8 @@ class TestMCPServerNetworkPolicyGeneration:
 
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
         mock_k8s.get_service.return_value = self._make_service_dict(None)
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
@@ -1275,8 +1275,8 @@ class TestMCPServerNetworkPolicyGeneration:
 
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
         mock_k8s.get_service.return_value = self._make_service_dict(None, svc_type="ExternalName")
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
@@ -1315,8 +1315,8 @@ class TestMCPServerNetworkPolicyGeneration:
 
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
         mock_k8s.get_service.return_value = self._make_service_dict(None, svc_type="ExternalName")
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
@@ -1359,8 +1359,8 @@ class TestMCPServerNetworkPolicyGeneration:
 
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[tool1], [], []]
-        mock_k8s.get_service_endpoint.side_effect = (
-            lambda name, ns, port: f"http://{name}.{ns}.svc.cluster.local:{port}"
+        mock_k8s.get_service_endpoint.side_effect = lambda name, ns, port: (
+            f"http://{name}.{ns}.svc.cluster.local:{port}"
         )
         mock_k8s.get_service.return_value = self._make_service_dict(None, svc_type="ExternalName")
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
