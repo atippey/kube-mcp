@@ -113,9 +113,10 @@ class TestMCPPromptDeletion:
 
         mock_custom_api = MagicMock()
 
-        with patch(
-            "src.controllers.mcpprompt_controller.get_k8s_client", return_value=mock_k8s
-        ), patch("kubernetes.client.CustomObjectsApi", return_value=mock_custom_api):
+        with (
+            patch("src.controllers.mcpprompt_controller.get_k8s_client", return_value=mock_k8s),
+            patch("kubernetes.client.CustomObjectsApi", return_value=mock_custom_api),
+        ):
             await delete_mcpprompt(
                 name="test-prompt",
                 namespace="default",
