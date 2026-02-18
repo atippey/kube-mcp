@@ -198,13 +198,13 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name == 'push' }}
+          load: ${{ github.event_name != 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Generate SBOM
-        if: github.event_name == 'push'
         uses: anchore/sbom-action@v0
         with:
           image: ghcr.io/${{ github.repository_owner }}/mcp-operator:${{ steps.meta.outputs.version }}
@@ -212,7 +212,6 @@ jobs:
           output-file: mcp-operator-sbom.spdx.json
 
       - name: Upload SBOM
-        if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: mcp-operator-sbom
@@ -255,13 +254,13 @@ jobs:
         with:
           context: ./examples/echo-server
           push: ${{ github.event_name == 'push' }}
+          load: ${{ github.event_name != 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Generate SBOM
-        if: github.event_name == 'push'
         uses: anchore/sbom-action@v0
         with:
           image: ghcr.io/${{ github.repository_owner }}/mcp-echo-server:${{ steps.meta.outputs.version }}
@@ -269,7 +268,6 @@ jobs:
           output-file: mcp-echo-server-sbom.spdx.json
 
       - name: Upload SBOM
-        if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: mcp-echo-server-sbom
