@@ -1,0 +1,199 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mcpresources.mcp.k8s.turd.ninja
+spec:
+  group: mcp.k8s.turd.ninja
+  names:
+    kind: MCPResource
+    listKind: MCPResourceList
+    plural: mcpresources
+    singular: mcpresource
+    shortNames:
+      - mcpr
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 63
+                  pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+                  description: MCP resource name (must be unique within server)
+                description:
+                  type: string
+                  maxLength: 500
+                  description: Human-readable description of the resource
+                operations:
+                  type: array
+                  description: HTTP operations for service-backed resources
+                  items:
+                    type: object
+                    required:
+                      - method
+                      - ingressPath
+                      - service
+                    properties:
+                      method:
+                        type: string
+                        enum:
+                          - GET
+                          - POST
+                          - PUT
+                          - DELETE
+                          - PATCH
+                        description: HTTP method for this operation
+                      ingressPath:
+                        type: string
+                        pattern: '^/.*$'
+                        description: Ingress path with optional {param} placeholders
+                      service:
+                        type: object
+                        required:
+                          - name
+                          - port
+                          - path
+                        properties:
+                          name:
+                            type: string
+                            minLength: 1
+                            maxLength: 253
+                            pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                            description: Kubernetes service name
+                          namespace:
+                            type: string
+                            minLength: 1
+                            maxLength: 63
+                            pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                            description: Service namespace (defaults to same as MCPResource)
+                          port:
+                            type: integer
+                            minimum: 1
+                            maximum: 65535
+                            description: Service port number
+                          path:
+                            type: string
+                            pattern: '^/.*$'
+                            description: Service path with optional {param} placeholders
+                      parameters:
+                        type: array
+                        description: Parameters for this operation
+                        items:
+                          type: object
+                          required:
+                            - name
+                            - in
+                          properties:
+                            name:
+                              type: string
+                              minLength: 1
+                              maxLength: 63
+                              pattern: '^[a-zA-Z0-9_]+$'
+                              description: Parameter name
+                            in:
+                              type: string
+                              enum:
+                                - path
+                                - query
+                                - header
+                              description: Parameter location
+                            required:
+                              type: boolean
+                              default: false
+                              description: Whether parameter is required
+                            description:
+                              type: string
+                              maxLength: 200
+                              description: Parameter description
+                content:
+                  type: object
+                  description: Inline content for simple static resources
+                  properties:
+                    uri:
+                      type: string
+                      minLength: 1
+                      maxLength: 500
+                      description: Resource URI identifier
+                    mimeType:
+                      type: string
+                      pattern: '^[a-z]+/[a-z0-9+.-]+$'
+                      default: text/plain
+                      description: MIME type of the content
+                    text:
+                      type: string
+                      maxLength: 100000
+                      description: Text content of the resource
+                    blob:
+                      type: string
+                      format: byte
+                      description: Base64-encoded binary content
+              # Validation: must have either operations or content, not both
+              oneOf:
+                - required:
+                    - operations
+                - required:
+                    - content
+            status:
+              type: object
+              properties:
+                ready:
+                  type: boolean
+                  description: Whether resource is ready for use
+                operationCount:
+                  type: integer
+                  description: Number of operations configured
+                lastSyncTime:
+                  type: string
+                  format: date-time
+                  description: Last time resource was synced
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Resource Name
+          type: string
+          jsonPath: .spec.name
+        - name: Operations
+          type: integer
+          jsonPath: .status.operationCount
+        - name: Ready
+          type: boolean
+          jsonPath: .status.ready
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

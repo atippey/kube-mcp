@@ -1,0 +1,9 @@
+{{- if .Values.createNamespace -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    {{- include "mcp-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/part-of: mcp-system
+{{- end }}

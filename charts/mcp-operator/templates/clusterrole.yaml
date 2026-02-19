@@ -1,0 +1,68 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "mcp-operator.fullname" . }}
+  labels:
+    {{- include "mcp-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+rules:
+  # MCP custom resources
+  - apiGroups: ["mcp.k8s.turd.ninja"]
+    resources:
+      - mcpservers
+      - mcptools
+      - mcpprompts
+      - mcpresources
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["mcp.k8s.turd.ninja"]
+    resources:
+      - mcpservers/status
+      - mcptools/status
+      - mcpprompts/status
+      - mcpresources/status
+    verbs: ["get", "update", "patch"]
+
+  # Core resources for managing deployments
+  - apiGroups: [""]
+    resources:
+      - configmaps
+      - secrets
+      - services
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Apps resources
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Networking resources
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Endpoints (for API server CIDR auto-detection)
+  - apiGroups: [""]
+    resources:
+      - endpoints
+    verbs: ["get", "list"]
+
+  # Events for status reporting
+  - apiGroups: [""]
+    resources:
+      - events
+    verbs: ["create", "patch"]
+
+  # Kopf requires these for its internal state
+  - apiGroups: [""]
+    resources:
+      - namespaces
+    verbs: ["get", "list", "watch"]
+
+  # Kopf needs to list CRDs to discover which resources to watch
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources:
+      - customresourcedefinitions
+    verbs: ["get", "list", "watch"]
