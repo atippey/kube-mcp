@@ -8,7 +8,7 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
 
-createNamespace: true
+createNamespace: false
 
 operator:
   resources:
