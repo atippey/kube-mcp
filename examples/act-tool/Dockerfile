@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
@@ -30,9 +30,9 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then ARCH="arm64"; else ARCH="x86_64"; fi &&
     tar -xf act.tar.gz -C /usr/local/bin act && \
     rm act.tar.gz
 
-# Use root user for Docker socket access
-# RUN adduser -D -u 1000 appuser
-# USER appuser
+# Use appuser for security (ensure gid matches socket owner if possible, or use socket proxy)
+RUN adduser -D -u 1000 appuser
+USER appuser
 
 COPY --from=builder /act-tool /act-tool
 

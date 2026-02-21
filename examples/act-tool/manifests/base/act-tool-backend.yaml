@@ -19,10 +19,17 @@ spec:
           emptyDir: {}
         - name: docker-socket
           emptyDir: {}
-        # Note: In a real scenario, you should mount your repository source code here (e.g., via PVC or hostPath).
-        # Without source code, commands like /list and /run will operate on an empty directory.
         - name: workspace
           emptyDir: {}
+      initContainers:
+        - name: clone-repo
+          image: alpine/git
+          # For example purposes, we clone this repo itself to test .github/workflows
+          command: ["git", "clone", "https://github.com/atippey/kube-mcp.git", "."]
+          workingDir: /workspace
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
       containers:
         - name: act-tool
           image: act-tool
@@ -49,6 +56,10 @@ spec:
               mountPath: /var/lib/docker
             - name: docker-socket
               mountPath: /var/run
+            # Important: Mount the workspace so the Docker daemon (in sidecar) can see the files
+            # when act (in main container) requests a bind mount of /workspace.
+            - name: workspace
+              mountPath: /workspace
 ---
 apiVersion: v1
 kind: Service

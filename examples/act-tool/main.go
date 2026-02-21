@@ -34,6 +34,37 @@ func main() {
 	}
 }
 
+// sanitizePath ensures the path is within the allowed directory (.github/workflows)
+func sanitizePath(file string) (string, error) {
+	// Clean the path to remove .. and other oddities
+	cleanPath := filepath.Clean(file)
+
+	// Prevent absolute paths or starting with ..
+	if filepath.IsAbs(cleanPath) || strings.HasPrefix(cleanPath, "..") {
+		return "", fmt.Errorf("invalid path: %s", file)
+	}
+
+	// Always prepend .github/workflows
+	fullPath := filepath.Join(".github/workflows", cleanPath)
+
+	// Verify it is still within .github/workflows
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	absPath, err := filepath.Abs(fullPath)
+	if err != nil {
+		return "", err
+	}
+	expectedPrefix := filepath.Join(cwd, ".github/workflows")
+	if !strings.HasPrefix(absPath, expectedPrefix) {
+		return "", fmt.Errorf("path traversal attempt: %s", file)
+	}
+
+	return fullPath, nil
+}
+
+
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
@@ -156,7 +187,12 @@ func handleValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	path := filepath.Join(".github/workflows", req.File)
+	path, err := sanitizePath(req.File)
+	if err != nil {
+		json.NewEncoder(w).Encode(ValidateResponse{Error: err.Error()})
+		return
+	}
+
 	content, err := os.ReadFile(path)
 	if err != nil {
 		json.NewEncoder(w).Encode(ValidateResponse{Error: fmt.Sprintf("failed to read file: %v", err)})
@@ -244,7 +280,12 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 	args := []string{}
 
 	if req.Workflow != "" {
-		args = append(args, "-W", filepath.Join(".github/workflows", req.Workflow))
+		path, err := sanitizePath(req.Workflow)
+		if err != nil {
+			json.NewEncoder(w).Encode(RunResponse{Error: err.Error()})
+			return
+		}
+		args = append(args, "-W", path)
 	}
 
 	if req.Job != "" {
@@ -456,7 +497,12 @@ func handleSecrets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	path := filepath.Join(".github/workflows", req.File)
+	path, err := sanitizePath(req.File)
+	if err != nil {
+		json.NewEncoder(w).Encode(SecretsResponse{Error: err.Error()})
+		return
+	}
+
 	content, err := os.ReadFile(path)
 	if err != nil {
 		json.NewEncoder(w).Encode(SecretsResponse{Error: fmt.Sprintf("failed to read file: %v", err)})
