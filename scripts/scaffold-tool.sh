@@ -359,7 +359,7 @@ fi
 
 # --- manifests/base/example-resources.yaml ---
 cat > "${TOOL_DIR}/manifests/base/example-resources.yaml" << RESEOF
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPServer
 metadata:
   name: ${NAME}
@@ -372,7 +372,7 @@ spec:
     matchLabels:
       mcp-server: ${NAME}
 ---
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPTool
 metadata:
   name: ${NAME}

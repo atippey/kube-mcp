@@ -1,7 +1,7 @@
 # Example MCP resources for testing
 # All resources use the label "mcp-server: echo" to be selected by the MCPServer
 ---
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPServer
 metadata:
   name: echo
@@ -15,7 +15,7 @@ spec:
       mcp-server: echo
 ---
 # Example MCPTool - points to the echo-backend service
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPTool
 metadata:
   name: echo-tool
@@ -40,7 +40,7 @@ spec:
   method: POST
 ---
 # Example MCPTool - calculator
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPTool
 metadata:
   name: calculator-tool
@@ -71,7 +71,7 @@ spec:
   method: POST
 ---
 # Example MCPPrompt - greeting template
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPPrompt
 metadata:
   name: greeting-prompt
@@ -101,7 +101,7 @@ spec:
       default: "anything"
 ---
 # Example MCPPrompt - code review template
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPPrompt
 metadata:
   name: code-review-prompt
@@ -131,7 +131,7 @@ spec:
       required: true
 ---
 # Example MCPResource - inline configuration
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPResource
 metadata:
   name: sample-config
@@ -155,7 +155,7 @@ spec:
       }
 ---
 # Example MCPResource - inline documentation
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPResource
 metadata:
   name: readme

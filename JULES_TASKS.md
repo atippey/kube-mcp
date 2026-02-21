@@ -9,7 +9,7 @@ Rote development tasks to be completed by Jules to save Claude tokens.
 **Status:** Completed
 
 **Description:**
-Replace all occurrences of `mcp.example.com` with `mcp.k8s.turd.ninja` across the codebase.
+Replace all occurrences of `mcp.example.com` with `kubemcp.io` across the codebase.
 
 **Files to update:**
 - `manifests/base/crds/mcpserver-crd.yaml`
@@ -26,7 +26,7 @@ Replace all occurrences of `mcp.example.com` with `mcp.k8s.turd.ninja` across th
 - Any test files that reference the CRD group
 
 **Search pattern:** `mcp.example.com`
-**Replace with:** `mcp.k8s.turd.ninja`
+**Replace with:** `kubemcp.io`
 
 **Verification:**
 ```bash
@@ -34,7 +34,7 @@ Replace all occurrences of `mcp.example.com` with `mcp.k8s.turd.ninja` across th
 grep -r "mcp.example.com" --include="*.yaml" --include="*.py"
 
 # Should return multiple results
-grep -r "mcp.k8s.turd.ninja" --include="*.yaml" --include="*.py"
+grep -r "kubemcp.io" --include="*.yaml" --include="*.py"
 ```
 
 ---
@@ -109,7 +109,7 @@ spec:
 **Verification:**
 ```bash
 # After applying updated CRDs, check they have status subresource
-kubectl get crd mcptools.mcp.k8s.turd.ninja -o jsonpath='{.spec.versions[0].subresources}'
+kubectl get crd mcptools.kubemcp.io -o jsonpath='{.spec.versions[0].subresources}'
 # Should output: {"status":{}}
 
 # Then verify status persists after reconciliation
@@ -173,7 +173,7 @@ Add Deployment creation to the MCPServer controller. When an MCPServer is create
 3. Set replicas from `spec.replicas`
 4. Set owner reference to MCPServer for automatic cleanup
 5. Add environment variables for Redis connection from `spec.redis.serviceName`
-6. Add labels: `app.kubernetes.io/name: mcp-server`, `app.kubernetes.io/instance: {name}`, `mcp.k8s.turd.ninja/server: {name}`
+6. Add labels: `app.kubernetes.io/name: mcp-server`, `app.kubernetes.io/instance: {name}`, `kubemcp.io/server: {name}`
 
 **Files to modify:**
 - `src/controllers/mcpserver_controller.py`

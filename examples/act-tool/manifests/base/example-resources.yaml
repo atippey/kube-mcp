@@ -1,4 +1,4 @@
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPServer
 metadata:
   name: act-tool
@@ -11,7 +11,7 @@ spec:
     matchLabels:
       mcp-server: act-tool
 ---
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPTool
 metadata:
   name: act-tools

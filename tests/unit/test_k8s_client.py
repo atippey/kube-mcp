@@ -365,7 +365,7 @@ class TestK8sClientListByLabelSelector:
             mock_custom.return_value.list_namespaced_custom_object.return_value = mock_result
             k8s = K8sClient()
             result = k8s.list_by_label_selector(
-                group="mcp.k8s.turd.ninja",
+                group="kubemcp.io",
                 version="v1alpha1",
                 plural="mcptools",
                 namespace="default",
@@ -395,7 +395,7 @@ class TestK8sClientListByLabelSelector:
             mock_custom.return_value.list_namespaced_custom_object.return_value = mock_result
             k8s = K8sClient()
             result = k8s.list_by_label_selector(
-                group="mcp.k8s.turd.ninja",
+                group="kubemcp.io",
                 version="v1alpha1",
                 plural="mcptools",
                 namespace="default",
@@ -425,7 +425,7 @@ class TestK8sClientListByLabelSelector:
             )
             k8s = K8sClient()
             result = k8s.list_by_label_selector(
-                group="mcp.k8s.turd.ninja",
+                group="kubemcp.io",
                 version="v1alpha1",
                 plural="mcptools",
                 namespace="default",
@@ -680,7 +680,7 @@ class TestK8sClientCreateOrUpdateNetworkPolicy:
             )
 
             owner_ref = {
-                "apiVersion": "mcp.k8s.turd.ninja/v1alpha1",
+                "apiVersion": "kubemcp.io/v1alpha1",
                 "kind": "MCPServer",
                 "name": "test-server",
                 "uid": "uid-123",

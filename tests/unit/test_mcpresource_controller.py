@@ -405,7 +405,7 @@ class TestMCPResourceDeletion:
 
             # Verify servers were listed
             mock_k8s.list_by_label_selector.assert_called_with(
-                group="mcp.k8s.turd.ninja",
+                group="kubemcp.io",
                 version="v1alpha1",
                 plural="mcpservers",
                 namespace="default",

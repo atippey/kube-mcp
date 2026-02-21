@@ -118,7 +118,7 @@ class K8sClient:
         """List custom resources by label selector.
 
         Args:
-            group: The API group (e.g., "mcp.k8s.turd.ninja").
+            group: The API group (e.g., "kubemcp.io").
             version: The API version (e.g., "v1alpha1").
             plural: The resource plural name (e.g., "mcptools").
             namespace: The namespace to search in.

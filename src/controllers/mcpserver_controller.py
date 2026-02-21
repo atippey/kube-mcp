@@ -19,9 +19,9 @@ from src.models.crds import MCPServerSpec
 from src.utils.k8s_client import get_k8s_client
 from src.utils.metrics import MANAGED_RESOURCES, RECONCILIATION_DURATION, RECONCILIATION_TOTAL
 
-EGRESS_MODE_ANNOTATION = "mcp.k8s.turd.ninja/egress-mode"
-EGRESS_PORTS_ANNOTATION = "mcp.k8s.turd.ninja/egress-ports"
-EGRESS_CIDRS_ANNOTATION = "mcp.k8s.turd.ninja/egress-cidrs"
+EGRESS_MODE_ANNOTATION = "kubemcp.io/egress-mode"
+EGRESS_PORTS_ANNOTATION = "kubemcp.io/egress-ports"
+EGRESS_CIDRS_ANNOTATION = "kubemcp.io/egress-cidrs"
 OPERATOR_API_SERVER_CIDR_ENV = "MCP_OPERATOR_API_SERVER_CIDR"
 DEFAULT_OPERATOR_API_SERVER_CIDR = "0.0.0.0/0"
 DEFAULT_OPERATOR_NAMESPACE = "mcp-system"
@@ -486,8 +486,8 @@ def _selector_to_dict(selector: Any) -> dict[str, Any]:
     return result
 
 
-@kopf.on.create("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")
-@kopf.on.update("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")  # type: ignore[arg-type]
+@kopf.on.create("kubemcp.io", "v1alpha1", "mcpservers")
+@kopf.on.update("kubemcp.io", "v1alpha1", "mcpservers")  # type: ignore[arg-type]
 async def reconcile_mcpserver(
     *,
     spec: dict[str, Any],
@@ -547,7 +547,7 @@ async def _reconcile_mcpserver_inner(
 
     # Find matching MCPTools
     tools = k8s.list_by_label_selector(
-        group="mcp.k8s.turd.ninja",
+        group="kubemcp.io",
         version="v1alpha1",
         plural="mcptools",
         namespace=namespace,
@@ -557,7 +557,7 @@ async def _reconcile_mcpserver_inner(
 
     # Find matching MCPPrompts
     prompts = k8s.list_by_label_selector(
-        group="mcp.k8s.turd.ninja",
+        group="kubemcp.io",
         version="v1alpha1",
         plural="mcpprompts",
         namespace=namespace,
@@ -568,7 +568,7 @@ async def _reconcile_mcpserver_inner(
 
     # Find matching MCPResources
     resources = k8s.list_by_label_selector(
-        group="mcp.k8s.turd.ninja",
+        group="kubemcp.io",
         version="v1alpha1",
         plural="mcpresources",
         namespace=namespace,
@@ -682,7 +682,7 @@ async def _reconcile_mcpserver_inner(
     if server_spec.ingress:
         logger.info(f"Creating/updating Ingress for MCPServer {name}")
         ingress_owner_ref = {
-            "apiVersion": "mcp.k8s.turd.ninja/v1alpha1",
+            "apiVersion": "kubemcp.io/v1alpha1",
             "kind": "MCPServer",
             "name": name,
             "uid": body["metadata"]["uid"],
@@ -706,7 +706,7 @@ async def _reconcile_mcpserver_inner(
     deployment_labels = {
         "app.kubernetes.io/name": "mcp-server",
         "app.kubernetes.io/instance": name,
-        "mcp.k8s.turd.ninja/server": name,
+        "kubemcp.io/server": name,
     }
 
     deployment_body = {
@@ -776,7 +776,7 @@ async def _reconcile_mcpserver_inner(
     # Create Service
     service_name = f"mcp-server-{name}"
     owner_reference = {
-        "apiVersion": "mcp.k8s.turd.ninja/v1alpha1",
+        "apiVersion": "kubemcp.io/v1alpha1",
         "kind": "MCPServer",
         "name": name,
         "uid": body["metadata"]["uid"],
@@ -835,7 +835,7 @@ async def _reconcile_mcpserver_inner(
     MANAGED_RESOURCES.labels(kind="MCPServer").inc(0)  # ensure metric exists
 
 
-@kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpservers")  # type: ignore[arg-type]
+@kopf.on.delete("kubemcp.io", "v1alpha1", "mcpservers")  # type: ignore[arg-type]
 async def delete_mcpserver(
     *,
     name: str,
