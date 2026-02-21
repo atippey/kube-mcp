@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: act-tool
-  namespace: mcp-test
+  namespace: mcp-system
 spec:
   replicas: 1
   selector:
@@ -14,6 +14,8 @@ spec:
         app: act-tool
         mcp-server: act-tool
     spec:
+      securityContext:
+        fsGroup: 1000
       volumes:
         - name: dind-storage
           emptyDir: {}
@@ -21,12 +23,19 @@ spec:
           emptyDir: {}
         - name: workspace
           emptyDir: {}
+        - name: tmp
+          emptyDir: {}
       initContainers:
         - name: clone-repo
           image: alpine/git
           # For example purposes, we clone this repo itself to test .github/workflows
           command: ["git", "clone", "https://github.com/atippey/kube-mcp.git", "."]
           workingDir: /workspace
+          securityContext:
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           volumeMounts:
             - name: workspace
               mountPath: /workspace
@@ -37,18 +46,28 @@ spec:
           workingDir: /workspace
           ports:
             - containerPort: 8080
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: DOCKER_HOST
               value: unix:///var/run/docker.sock
+            - name: HOME
+              value: /tmp
           volumeMounts:
             - name: docker-socket
               mountPath: /var/run
             - name: workspace
               mountPath: /workspace
+            - name: tmp
+              mountPath: /tmp
         # DinD sidecar
-        # Note: ARC (Actions Runner Controller) is an alternative approach that avoids DinD entirely.
         - name: dind
-          image: docker:dind
+          image: docker:27.5-dind
           securityContext:
             privileged: true
           volumeMounts:
@@ -56,8 +75,6 @@ spec:
               mountPath: /var/lib/docker
             - name: docker-socket
               mountPath: /var/run
-            # Important: Mount the workspace so the Docker daemon (in sidecar) can see the files
-            # when act (in main container) requests a bind mount of /workspace.
             - name: workspace
               mountPath: /workspace
 ---
@@ -65,7 +82,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: act-tool-svc
-  namespace: mcp-test
+  namespace: mcp-system
 spec:
   selector:
     app: act-tool

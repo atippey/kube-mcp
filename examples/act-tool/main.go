@@ -347,6 +347,16 @@ type DiffResponse struct {
 	Error        string   `json:"error,omitempty"`
 }
 
+// sanitizeRef checks if the git reference is safe (alphanumeric, -, _, /, .)
+func sanitizeRef(ref string) bool {
+	matched, _ := regexp.MatchString(`^[a-zA-Z0-9_\-/\.]+$`, ref)
+	// Also ensure it doesn't start with - (flag injection)
+	if strings.HasPrefix(ref, "-") {
+		return false
+	}
+	return matched
+}
+
 func handleDiff(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var req DiffRequest
@@ -357,6 +367,11 @@ func handleDiff(w http.ResponseWriter, r *http.Request) {
 
 	if req.Base == "" || req.Head == "" {
 		http.Error(w, "base and head are required", http.StatusBadRequest)
+		return
+	}
+
+	if !sanitizeRef(req.Base) || !sanitizeRef(req.Head) {
+		json.NewEncoder(w).Encode(DiffResponse{Error: "invalid git reference"})
 		return
 	}
 

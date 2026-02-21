@@ -2,7 +2,7 @@ apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPServer
 metadata:
   name: act-tool
-  namespace: mcp-test
+  namespace: mcp-system
 spec:
   replicas: 1
   redis:
@@ -15,7 +15,7 @@ apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPTool
 metadata:
   name: act-tools
-  namespace: mcp-test
+  namespace: mcp-system
   labels:
     mcp-server: act-tool
 spec:
