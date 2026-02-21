@@ -1,7 +1,7 @@
 # MCP resources for hash-tool
 # The MCPTool uses label "mcp-server: hash-tool" for selection
 ---
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPServer
 metadata:
   name: hash-tool
@@ -14,7 +14,7 @@ spec:
     matchLabels:
       mcp-server: hash-tool
 ---
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPTool
 metadata:
   name: hash-tool

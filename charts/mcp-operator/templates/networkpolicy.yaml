@@ -87,7 +87,7 @@ spec:
         # Cross-namespace: MCP server pods from labeled namespaces
         - namespaceSelector:
             matchLabels:
-              mcp.k8s.turd.ninja/allow-cross-namespace: "true"
+              kubemcp.io/allow-cross-namespace: "true"
           podSelector:
             matchLabels:
               app.kubernetes.io/name: mcp-server
@@ -118,7 +118,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              mcp.k8s.turd.ninja/allow-cross-namespace: "true"
+              kubemcp.io/allow-cross-namespace: "true"
       ports:
         - port: 8080
           protocol: TCP

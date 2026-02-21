@@ -1,7 +1,7 @@
 # MCP resources for dns-tool
 # The MCPTool uses label "mcp-server: dns-tool" for selection
 ---
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPServer
 metadata:
   name: dns-tool
@@ -14,7 +14,7 @@ spec:
     matchLabels:
       mcp-server: dns-tool
 ---
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPTool
 metadata:
   name: dns-tool-tool

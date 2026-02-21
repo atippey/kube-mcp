@@ -27,7 +27,7 @@ def sample_mcpserver_spec() -> dict[str, Any]:
         "replicas": 2,
         "redis": {"serviceName": "mcp-redis"},
         "ingress": {
-            "host": "mcp.k8s.turd.ninja",
+            "host": "kubemcp.io",
             "tlsSecretName": "mcp-tls",
             "pathPrefix": "/mcp",
         },

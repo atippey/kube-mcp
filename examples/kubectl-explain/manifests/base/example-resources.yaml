@@ -1,7 +1,7 @@
 # MCP resources for kubectl-explain tool
 # The MCPTool uses label "mcp-server: kubectl-explain" for selection
 ---
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPServer
 metadata:
   name: kubectl-explain
@@ -14,7 +14,7 @@ spec:
     matchLabels:
       mcp-server: kubectl-explain
 ---
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPTool
 metadata:
   name: kubectl-explain-tool

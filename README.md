@@ -51,7 +51,7 @@ make run
 
 ```yaml
 # Create an MCP server that selects tools with label "mcp-server: main"
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPServer
 metadata:
   name: main
@@ -65,7 +65,7 @@ spec:
       mcp-server: main
 ---
 # Register a tool
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPTool
 metadata:
   name: github-search
@@ -142,7 +142,7 @@ NetworkPolicies restrict traffic to `mcp-system` by default. To allow pods from
 another namespace to reach MCP servers and Redis, label the namespace:
 
 ```bash
-kubectl label namespace <namespace> mcp.k8s.turd.ninja/allow-cross-namespace=true
+kubectl label namespace <namespace> kubemcp.io/allow-cross-namespace=true
 ```
 
 The k3d overlay opens MCP server ingress to all pods for local development.
@@ -157,9 +157,9 @@ on the `MCPTool` or `MCPResource`:
 ```yaml
 metadata:
   annotations:
-    mcp.k8s.turd.ninja/egress-mode: cidr      # selector|namespace|cidr
-    mcp.k8s.turd.ninja/egress-cidrs: 1.2.3.4/32,10.0.0.0/24
-    mcp.k8s.turd.ninja/egress-ports: "443,8443"  # optional; defaults to service port
+    kubemcp.io/egress-mode: cidr      # selector|namespace|cidr
+    kubemcp.io/egress-cidrs: 1.2.3.4/32,10.0.0.0/24
+    kubemcp.io/egress-ports: "443,8443"  # optional; defaults to service port
 ```
 
 ## Architecture
@@ -206,7 +206,7 @@ spec:
   redis:
     serviceName: mcp-redis       # Redis service for state
   ingress:
-    host: mcp.k8s.turd.ninja        # Ingress hostname
+    host: kubemcp.io        # Ingress hostname
     tlsSecretName: mcp-tls       # TLS secret
     pathPrefix: /mcp             # Base path
   toolSelector:

@@ -1233,7 +1233,7 @@ class TestMCPServerNetworkPolicyGeneration:
         tool1 = self._make_tool_cr(
             "tool1",
             "selectorless-svc",
-            annotations={"mcp.k8s.turd.ninja/egress-mode": "namespace"},
+            annotations={"kubemcp.io/egress-mode": "namespace"},
         )
 
         mock_k8s = MagicMock()
@@ -1308,8 +1308,8 @@ class TestMCPServerNetworkPolicyGeneration:
             "tool1",
             "external-svc",
             annotations={
-                "mcp.k8s.turd.ninja/egress-mode": "cidr",
-                "mcp.k8s.turd.ninja/egress-cidrs": "1.2.3.4/32",
+                "kubemcp.io/egress-mode": "cidr",
+                "kubemcp.io/egress-cidrs": "1.2.3.4/32",
             },
         )
 
@@ -1351,9 +1351,9 @@ class TestMCPServerNetworkPolicyGeneration:
             "external-svc",
             svc_port=443,
             annotations={
-                "mcp.k8s.turd.ninja/egress-mode": "cidr",
-                "mcp.k8s.turd.ninja/egress-cidrs": "10.0.0.0/8, 10.0.0.0/8, 1.2.3.4/32",
-                "mcp.k8s.turd.ninja/egress-ports": "8443,443,443",
+                "kubemcp.io/egress-mode": "cidr",
+                "kubemcp.io/egress-cidrs": "10.0.0.0/8, 10.0.0.0/8, 1.2.3.4/32",
+                "kubemcp.io/egress-ports": "8443,443,443",
             },
         )
 

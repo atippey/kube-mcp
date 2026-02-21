@@ -5,7 +5,7 @@ import time
 import pytest
 from kubernetes import client
 
-GROUP = "mcp.k8s.turd.ninja"
+GROUP = "kubemcp.io"
 VERSION = "v1alpha1"
 SERVER_PLURAL = "mcpservers"
 TOOL_PLURAL = "mcptools"

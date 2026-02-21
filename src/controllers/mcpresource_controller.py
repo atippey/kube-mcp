@@ -49,8 +49,8 @@ def _create_condition(
     }
 
 
-@kopf.on.create("mcp.k8s.turd.ninja", "v1alpha1", "mcpresources")
-@kopf.on.update("mcp.k8s.turd.ninja", "v1alpha1", "mcpresources")  # type: ignore[arg-type]
+@kopf.on.create("kubemcp.io", "v1alpha1", "mcpresources")
+@kopf.on.update("kubemcp.io", "v1alpha1", "mcpresources")  # type: ignore[arg-type]
 async def reconcile_mcpresource(
     *,
     spec: dict[str, Any],
@@ -196,7 +196,7 @@ async def _reconcile_mcpresource_inner(
     patch.status["conditions"] = []
 
 
-@kopf.on.delete("mcp.k8s.turd.ninja", "v1alpha1", "mcpresources")  # type: ignore[arg-type]
+@kopf.on.delete("kubemcp.io", "v1alpha1", "mcpresources")  # type: ignore[arg-type]
 async def delete_mcpresource(
     *,
     name: str,
@@ -227,7 +227,7 @@ async def _trigger_mcpserver_reconciliation(namespace: str, logger: kopf.Logger)
 
     # Find all MCPServers in this namespace
     servers = k8s.list_by_label_selector(
-        group="mcp.k8s.turd.ninja",
+        group="kubemcp.io",
         version="v1alpha1",
         plural="mcpservers",
         namespace=namespace,
@@ -245,14 +245,12 @@ async def _trigger_mcpserver_reconciliation(namespace: str, logger: kopf.Logger)
             # Touch the server's metadata to trigger reconcile
             patch = {
                 "metadata": {
-                    "annotations": {
-                        "mcp.k8s.turd.ninja/last-child-update": datetime.now(UTC).isoformat()
-                    }
+                    "annotations": {"kubemcp.io/last-child-update": datetime.now(UTC).isoformat()}
                 }
             }
 
             api.patch_namespaced_custom_object(
-                group="mcp.k8s.turd.ninja",
+                group="kubemcp.io",
                 version="v1alpha1",
                 namespace=namespace,
                 plural="mcpservers",

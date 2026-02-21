@@ -7,7 +7,7 @@ import pytest
 import yaml
 from kubernetes import client, utils
 
-GROUP = "mcp.k8s.turd.ninja"
+GROUP = "kubemcp.io"
 VERSION = "v1alpha1"
 PLURAL = "mcpservers"
 

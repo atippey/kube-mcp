@@ -1,4 +1,4 @@
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPServer
 metadata:
   name: kube-info-tool
@@ -11,7 +11,7 @@ spec:
     matchLabels:
       mcp-server: kube-info-tool
 ---
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPTool
 metadata:
   name: kube-info-namespaces
@@ -31,7 +31,7 @@ spec:
     properties: {}
   method: POST
 ---
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
+apiVersion: kubemcp.io/v1alpha1
 kind: MCPTool
 metadata:
   name: kube-info-pods
