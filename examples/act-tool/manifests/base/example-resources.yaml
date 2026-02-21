@@ -1,0 +1,95 @@
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPServer
+metadata:
+  name: act-tool
+  namespace: mcp-system
+spec:
+  replicas: 1
+  redis:
+    serviceName: mcp-redis
+  toolSelector:
+    matchLabels:
+      mcp-server: act-tool
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPTool
+metadata:
+  name: act-tools
+  namespace: mcp-system
+  labels:
+    mcp-server: act-tool
+spec:
+  service:
+    name: act-tool-svc
+    port: 8080
+  tools:
+    - name: act-list
+      path: /list
+      description: |
+        Parse .github/workflows/ YAML files and return available workflows, their jobs, and triggers.
+      inputSchema:
+        type: object
+        properties: {}
+      method: POST
+    - name: act-validate
+      path: /validate
+      description: |
+        Static analysis of a workflow file for act compatibility.
+        Checks for incompatible actions, caching issues, etc.
+      inputSchema:
+        type: object
+        properties:
+          file:
+            type: string
+            description: "Workflow filename (e.g. ci.yml) in .github/workflows/"
+        required: ["file"]
+      method: POST
+    - name: act-run
+      path: /run
+      description: |
+        Execute a workflow or job via act CLI.
+        Captures stdout/stderr and exit code.
+      inputSchema:
+        type: object
+        properties:
+          workflow:
+            type: string
+            description: "Workflow filename (e.g. ci.yml)"
+          job:
+            type: string
+            description: "Specific job ID to run"
+          event:
+            type: string
+            description: "Event to simulate (e.g. push, pull_request)"
+          dryrun:
+            type: boolean
+            description: "Run in dry-run mode (-n)"
+        required: ["workflow"]
+      method: POST
+    - name: act-diff
+      path: /diff
+      description: |
+        Given a git diff (base vs head ref), determine which workflow jobs are affected.
+      inputSchema:
+        type: object
+        properties:
+          base:
+            type: string
+            description: "Base git ref (e.g. main)"
+          head:
+            type: string
+            description: "Head git ref (e.g. HEAD)"
+        required: ["base", "head"]
+      method: POST
+    - name: act-secrets
+      path: /secrets
+      description: |
+        Introspect a workflow file for secrets.* references.
+      inputSchema:
+        type: object
+        properties:
+          file:
+            type: string
+            description: "Workflow filename (e.g. ci.yml)"
+        required: ["file"]
+      method: POST

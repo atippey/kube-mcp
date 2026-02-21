@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: act-tool
+  namespace: mcp-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: act-tool
+  template:
+    metadata:
+      labels:
+        app: act-tool
+        mcp-server: act-tool
+    spec:
+      securityContext:
+        fsGroup: 1000
+      volumes:
+        - name: dind-storage
+          emptyDir: {}
+        - name: docker-socket
+          emptyDir: {}
+        - name: workspace
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+      initContainers:
+        - name: clone-repo
+          image: alpine/git
+          # For example purposes, we clone this repo itself to test .github/workflows
+          command: ["git", "clone", "https://github.com/atippey/kube-mcp.git", "."]
+          workingDir: /workspace
+          securityContext:
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+      containers:
+        - name: act-tool
+          image: act-tool
+          imagePullPolicy: IfNotPresent
+          workingDir: /workspace
+          ports:
+            - containerPort: 8080
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: DOCKER_HOST
+              value: unix:///var/run/docker.sock
+            - name: HOME
+              value: /tmp
+          volumeMounts:
+            - name: docker-socket
+              mountPath: /var/run
+            - name: workspace
+              mountPath: /workspace
+            - name: tmp
+              mountPath: /tmp
+        # DinD sidecar
+        - name: dind
+          image: docker:27.5-dind
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: dind-storage
+              mountPath: /var/lib/docker
+            - name: docker-socket
+              mountPath: /var/run
+            - name: workspace
+              mountPath: /workspace
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: act-tool-svc
+  namespace: mcp-system
+spec:
+  selector:
+    app: act-tool
+  ports:
+    - port: 8080
+      targetPort: 8080
