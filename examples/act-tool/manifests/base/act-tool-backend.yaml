@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: act-tool
+  namespace: mcp-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: act-tool
+  template:
+    metadata:
+      labels:
+        app: act-tool
+        mcp-server: act-tool
+    spec:
+      volumes:
+        - name: dind-storage
+          emptyDir: {}
+        - name: docker-socket
+          emptyDir: {}
+        # Note: In a real scenario, you should mount your repository source code here (e.g., via PVC or hostPath).
+        # Without source code, commands like /list and /run will operate on an empty directory.
+        - name: workspace
+          emptyDir: {}
+      containers:
+        - name: act-tool
+          image: act-tool
+          imagePullPolicy: IfNotPresent
+          workingDir: /workspace
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DOCKER_HOST
+              value: unix:///var/run/docker.sock
+          volumeMounts:
+            - name: docker-socket
+              mountPath: /var/run
+            - name: workspace
+              mountPath: /workspace
+        # DinD sidecar
+        # Note: ARC (Actions Runner Controller) is an alternative approach that avoids DinD entirely.
+        - name: dind
+          image: docker:dind
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: dind-storage
+              mountPath: /var/lib/docker
+            - name: docker-socket
+              mountPath: /var/run
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: act-tool-svc
+  namespace: mcp-test
+spec:
+  selector:
+    app: act-tool
+  ports:
+    - port: 8080
+      targetPort: 8080
