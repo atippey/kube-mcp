@@ -48,7 +48,7 @@ Project is **~85% production-ready** with solid fundamentals:
 
 ## Phase 5: Domain Migration & Documentation
 
-- [ ] **Migrate API group to kubemcp.io** - Replace `kubemcp.io` with `kubemcp.io` across CRDs, controllers, models, manifests, RBAC, tests, Helm chart, and docs
+- [x] **Migrate API group to kubemcp.io** - Replace `mcp.k8s.turd.ninja` with `kubemcp.io` across CRDs, controllers, models, manifests, RBAC, tests, Helm chart, and docs
 - [ ] **Set up kubemcp.io docs site** - K8s-style docs with schema reference, concept pages, and task walkthroughs (MkDocs Material)
 - [ ] **Update all repo references** - README, CLAUDE.md, AGENTS.md, examples, dogfood-ideas.md
 - [ ] **Troubleshooting Guide** - Common errors and debug steps
