@@ -1,0 +1,106 @@
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPServer
+metadata:
+  name: compliance-tool
+  namespace: mcp-test
+spec:
+  replicas: 1
+  redis:
+    serviceName: mcp-redis
+  toolSelector:
+    matchLabels:
+      mcp-server: compliance-tool
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPTool
+metadata:
+  name: compliance-check
+  namespace: mcp-test
+  labels:
+    mcp-server: compliance-tool
+spec:
+  name: compliance-check
+  description: |
+    Validate current repository/project state against FIPS/STIG compliance rules.
+    Local evaluation mode by default for ITAR/air-gapped use.
+  service:
+    name: compliance-tool-svc
+    port: 8080
+    path: /compliance/check
+  inputSchema:
+    type: object
+    properties:
+      profiles:
+        type: array
+        items:
+          type: string
+      lockfiles:
+        type: array
+      manifests:
+        type: array
+      dockerfile:
+        type: string
+      config:
+        type: string
+    required:
+      - profiles
+  method: POST
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPTool
+metadata:
+  name: compliance-can-i
+  namespace: mcp-test
+  labels:
+    mcp-server: compliance-tool
+spec:
+  name: compliance-can-i
+  description: |
+    Fast what-if check for adding a dependency or changing build inputs.
+    Returns policy violations and remediation hints.
+  service:
+    name: compliance-tool-svc
+    port: 8080
+    path: /compliance/can-i
+  inputSchema:
+    type: object
+    properties:
+      action:
+        type: string
+      ecosystem:
+        type: string
+      package:
+        type: string
+      profiles:
+        type: array
+        items:
+          type: string
+      dockerfile:
+        type: string
+      config:
+        type: string
+    required:
+      - action
+      - ecosystem
+      - package
+  method: POST
+---
+apiVersion: mcp.k8s.turd.ninja/v1alpha1
+kind: MCPTool
+metadata:
+  name: compliance-rules-status
+  namespace: mcp-test
+  labels:
+    mcp-server: compliance-tool
+spec:
+  name: compliance-rules-status
+  description: |
+    Returns local rules snapshot status and optional Iron Bank connectivity probe.
+  service:
+    name: compliance-tool-svc
+    port: 8080
+    path: /rules/status
+  inputSchema:
+    type: object
+    properties: {}
+  method: POST
