@@ -21,21 +21,52 @@ spec:
       labels:
         app.kubernetes.io/name: compliance-tool
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       serviceAccountName: compliance-tool
+      initContainers:
+        - name: rules-bootstrap
+          image: ghcr.io/atippey/compliance-tool:v0.1.0
+          command:
+            - /bin/sh
+            - -c
+            - cp /app/data/rules-snapshot.json /var/lib/compliance/rules-snapshot.json || true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: compliance-rules
+              mountPath: /var/lib/compliance
       containers:
         - name: compliance-tool
-          image: ghcr.io/atippey/compliance-tool:latest
+          image: ghcr.io/atippey/compliance-tool:v0.1.0
           ports:
             - containerPort: 8080
           env:
             - name: COMPLIANCE_ALLOW_REMOTE
               value: "false"
+            - name: COMPLIANCE_RULES_PATH
+              value: /var/lib/compliance/rules-snapshot.json
             - name: IRON_BANK_READ_API
               valueFrom:
                 secretKeyRef:
                   name: compliance-tool-secrets
                   key: iron_bank_read_api
                   optional: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: compliance-rules
+              mountPath: /var/lib/compliance
           livenessProbe:
             httpGet:
               path: /health
@@ -55,6 +86,9 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "300m"
+      volumes:
+        - name: compliance-rules
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

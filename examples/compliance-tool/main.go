@@ -65,6 +65,12 @@ type CheckResponse struct {
 	Mode      string    `json:"mode"`
 }
 
+type EvalResult struct {
+	Findings  []Finding
+	Evaluated int
+	Exempted  int
+}
+
 type CanIResponse struct {
 	Allowed       bool              `json:"allowed"`
 	Package       string            `json:"package"`
@@ -211,20 +217,20 @@ func handleCheck(w http.ResponseWriter, r *http.Request) {
 	profiles := resolveProfiles(req.Profile, req.Profiles)
 	cfg := parseConfig(req.Config)
 	deps := parseLockfiles(req.Lockfiles)
-	findings := evaluateCheck(profiles, cfg, deps, req.Manifests, req.Dockerfile)
+	result := evaluateCheck(profiles, cfg, deps, req.Manifests, req.Dockerfile)
 
-	failed := len(findings)
-	total := maxInt(1, len(profiles)*4)
-	passed := total - failed
-	if passed < 0 {
-		passed = 0
+	failed := len(result.Findings)
+	total := result.Evaluated
+	if total < failed+result.Exempted {
+		total = failed + result.Exempted
 	}
+	passed := total - failed - result.Exempted
 
 	resp := CheckResponse{
 		Compliant: failed == 0,
 		Profiles:  profiles,
-		Score:     Score{Passed: passed, Failed: failed, Exempted: 0, Total: total},
-		Findings:  findings,
+		Score:     Score{Passed: passed, Failed: failed, Exempted: result.Exempted, Total: total},
+		Findings:  result.Findings,
 		Mode:      evalMode(),
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -325,29 +331,41 @@ func handleCanI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func evaluateCheck(profiles []string, cfg Config, deps []dependency, manifests []string, dockerfile string) []Finding {
+func evaluateCheck(profiles []string, cfg Config, deps []dependency, manifests []string, dockerfile string) EvalResult {
 	snap := loadSnapshot()
-	findings := []Finding{}
+	out := EvalResult{Findings: []Finding{}}
 	for _, profile := range profiles {
 		switch profile {
 		case "fips", "fips-140-3":
-			findings = append(findings, evaluateFIPS(cfg, deps, dockerfile, snap)...)
+			r := evaluateFIPS(cfg, deps, dockerfile, snap)
+			out.Findings = append(out.Findings, r.Findings...)
+			out.Evaluated += r.Evaluated
+			out.Exempted += r.Exempted
 		case "stig", "stig-container":
-			findings = append(findings, evaluateSTIG(cfg, manifests, dockerfile)...)
+			r := evaluateSTIG(cfg, manifests, dockerfile)
+			out.Findings = append(out.Findings, r.Findings...)
+			out.Evaluated += r.Evaluated
+			out.Exempted += r.Exempted
 		case "all":
-			findings = append(findings, evaluateFIPS(cfg, deps, dockerfile, snap)...)
-			findings = append(findings, evaluateSTIG(cfg, manifests, dockerfile)...)
+			fips := evaluateFIPS(cfg, deps, dockerfile, snap)
+			stig := evaluateSTIG(cfg, manifests, dockerfile)
+			out.Findings = append(out.Findings, fips.Findings...)
+			out.Findings = append(out.Findings, stig.Findings...)
+			out.Evaluated += fips.Evaluated + stig.Evaluated
+			out.Exempted += fips.Exempted + stig.Exempted
 		}
 	}
-	return dedupeFindings(findings)
+	out.Findings = dedupeFindings(out.Findings)
+	return out
 }
 
-func evaluateFIPS(cfg Config, deps []dependency, dockerfile string, snap RulesSnapshot) []Finding {
-	findings := []Finding{}
+func evaluateFIPS(cfg Config, deps []dependency, dockerfile string, snap RulesSnapshot) EvalResult {
+	out := EvalResult{Findings: []Finding{}}
 
 	for _, dep := range deps {
+		out.Evaluated++
 		if isDenied(dep.Name, dep.Ecosystem, snap) && !isExempt(dep.Name, "FIPS-CRYPTO-002", cfg) {
-			findings = append(findings, Finding{
+			out.Findings = append(out.Findings, Finding{
 				ID:          "FIPS-CRYPTO-002",
 				Severity:    "CRITICAL",
 				Category:    "dependency",
@@ -355,6 +373,8 @@ func evaluateFIPS(cfg Config, deps []dependency, dockerfile string, snap RulesSn
 				Message:     "Non-validated crypto package found.",
 				Remediation: "Replace package with a validated crypto implementation.",
 			})
+		} else if isDenied(dep.Name, dep.Ecosystem, snap) {
+			out.Exempted++
 		}
 	}
 
@@ -364,7 +384,13 @@ func evaluateFIPS(cfg Config, deps []dependency, dockerfile string, snap RulesSn
 		"has_go":            hasEcosystem(deps, "go"),
 		"go_boringcrypto":   strings.Contains(strings.ToLower(dockerfile), "goexperiment=boringcrypto"),
 	}
-	findings = append(findings, evaluateCELRules(buildCtx, []CELRule{
+	if buildCtx["has_python"].(bool) {
+		out.Evaluated++
+	}
+	if buildCtx["has_go"].(bool) {
+		out.Evaluated++
+	}
+	out.Findings = append(out.Findings, evaluateCELRules(buildCtx, []CELRule{
 		{
 			ID:          "FIPS-PY-BUILD-001",
 			Severity:    "HIGH",
@@ -389,8 +415,9 @@ func evaluateFIPS(cfg Config, deps []dependency, dockerfile string, snap RulesSn
 			if dep.Ecosystem != "node" {
 				continue
 			}
+			out.Evaluated++
 			if isKnownNativeNodePackage(dep.Name, snap) {
-				findings = append(findings, Finding{
+				out.Findings = append(out.Findings, Finding{
 					ID:          "FIPS-NODE-001",
 					Severity:    "HIGH",
 					Category:    "dependency",
@@ -403,6 +430,7 @@ func evaluateFIPS(cfg Config, deps []dependency, dockerfile string, snap RulesSn
 	}
 
 	if hasEcosystem(deps, "rust") {
+		out.Evaluated++
 		hasApproved := false
 		for _, dep := range deps {
 			if dep.Ecosystem != "rust" {
@@ -413,7 +441,7 @@ func evaluateFIPS(cfg Config, deps []dependency, dockerfile string, snap RulesSn
 			}
 		}
 		if !hasApproved {
-			findings = append(findings, Finding{
+			out.Findings = append(out.Findings, Finding{
 				ID:          "FIPS-RUST-001",
 				Severity:    "HIGH",
 				Category:    "dependency",
@@ -423,11 +451,11 @@ func evaluateFIPS(cfg Config, deps []dependency, dockerfile string, snap RulesSn
 		}
 	}
 
-	return findings
+	return out
 }
 
-func evaluateSTIG(cfg Config, manifests []string, dockerfile string) []Finding {
-	findings := []Finding{}
+func evaluateSTIG(cfg Config, manifests []string, dockerfile string) EvalResult {
+	out := EvalResult{Findings: []Finding{}}
 	all := strings.Join(manifests, "\n---\n")
 	lower := strings.ToLower(all)
 
@@ -437,7 +465,8 @@ func evaluateSTIG(cfg Config, manifests []string, dockerfile string) []Finding {
 		"has_latest_tag":                       strings.Contains(lower, ":latest"),
 		"has_network_policy":                   strings.Contains(lower, "kind: networkpolicy") && strings.Contains(lower, "policytypes") && strings.Contains(lower, "ingress") && strings.Contains(lower, "egress"),
 	}
-	findings = append(findings, evaluateCELRules(stigCtx, []CELRule{
+	out.Evaluated += 4
+	out.Findings = append(out.Findings, evaluateCELRules(stigCtx, []CELRule{
 		{
 			ID:          "STIG-CTR-001",
 			Severity:    "CAT-I",
@@ -474,8 +503,9 @@ func evaluateSTIG(cfg Config, manifests []string, dockerfile string) []Finding {
 
 	if cfg.RequireIronBank {
 		for _, img := range dockerfileBaseImages(dockerfile) {
+			out.Evaluated++
 			if !strings.HasPrefix(img, "registry1.dso.mil/") {
-				findings = append(findings, Finding{
+				out.Findings = append(out.Findings, Finding{
 					ID: "STIG-CTR-003", Severity: "CAT-I", Category: "dockerfile",
 					Message:     "require_iron_bank=true but Dockerfile uses non-Iron-Bank base image.",
 					Evidence:    img,
@@ -485,7 +515,7 @@ func evaluateSTIG(cfg Config, manifests []string, dockerfile string) []Finding {
 		}
 	}
 
-	return findings
+	return out
 }
 
 func parseLockfiles(lockfiles []LockfileInput) []dependency {
@@ -1009,13 +1039,6 @@ func profileDelta(reasonCount int) string {
 		return "no-risk-increase"
 	}
 	return "risk-increases-" + strconv.Itoa(reasonCount)
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

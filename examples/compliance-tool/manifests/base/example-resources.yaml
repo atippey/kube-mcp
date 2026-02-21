@@ -14,93 +14,93 @@ spec:
 apiVersion: mcp.k8s.turd.ninja/v1alpha1
 kind: MCPTool
 metadata:
-  name: compliance-check
+  name: compliance-tools
   namespace: mcp-test
   labels:
     mcp-server: compliance-tool
 spec:
-  name: compliance-check
-  description: |
-    Validate current repository/project state against FIPS/STIG compliance rules.
-    Local evaluation mode by default for ITAR/air-gapped use.
   service:
     name: compliance-tool-svc
     port: 8080
-    path: /compliance/check
-  inputSchema:
-    type: object
-    properties:
-      profiles:
-        type: array
-        items:
-          type: string
-      lockfiles:
-        type: array
-      manifests:
-        type: array
-      dockerfile:
-        type: string
-      config:
-        type: string
-    required:
-      - profiles
-  method: POST
----
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
-kind: MCPTool
-metadata:
-  name: compliance-can-i
-  namespace: mcp-test
-  labels:
-    mcp-server: compliance-tool
-spec:
-  name: compliance-can-i
-  description: |
-    Fast what-if check for adding a dependency or changing build inputs.
-    Returns policy violations and remediation hints.
-  service:
-    name: compliance-tool-svc
-    port: 8080
-    path: /compliance/can-i
-  inputSchema:
-    type: object
-    properties:
-      action:
-        type: string
-      ecosystem:
-        type: string
-      package:
-        type: string
-      profiles:
-        type: array
-        items:
-          type: string
-      dockerfile:
-        type: string
-      config:
-        type: string
-    required:
-      - action
-      - ecosystem
-      - package
-  method: POST
----
-apiVersion: mcp.k8s.turd.ninja/v1alpha1
-kind: MCPTool
-metadata:
-  name: compliance-rules-status
-  namespace: mcp-test
-  labels:
-    mcp-server: compliance-tool
-spec:
-  name: compliance-rules-status
-  description: |
-    Returns local rules snapshot status and optional Iron Bank connectivity probe.
-  service:
-    name: compliance-tool-svc
-    port: 8080
-    path: /rules/status
-  inputSchema:
-    type: object
-    properties: {}
-  method: POST
+  tools:
+    - name: compliance-check
+      path: /compliance/check
+      description: |
+        Validate current repository/project state against FIPS/STIG compliance rules.
+        Local evaluation mode by default for ITAR/air-gapped use.
+      inputSchema:
+        type: object
+        properties:
+          profiles:
+            type: array
+            items:
+              type: string
+          lockfiles:
+            type: array
+          manifests:
+            type: array
+          dockerfile:
+            type: string
+          config:
+            type: string
+        required:
+          - profiles
+      method: POST
+    - name: compliance-can-i
+      path: /compliance/can-i
+      description: |
+        Fast what-if check for adding a dependency or changing build inputs.
+        Returns policy violations and remediation hints.
+      inputSchema:
+        type: object
+        properties:
+          action:
+            type: string
+          ecosystem:
+            type: string
+          package:
+            type: string
+          profiles:
+            type: array
+            items:
+              type: string
+          dockerfile:
+            type: string
+          config:
+            type: string
+        required:
+          - action
+          - ecosystem
+          - package
+      method: POST
+    - name: compliance-rules-status
+      path: /rules/status
+      description: |
+        Returns local rules snapshot status and optional Iron Bank connectivity probe.
+      inputSchema:
+        type: object
+        properties: {}
+      method: POST
+    - name: compliance-rules-export
+      path: /rules/export
+      description: |
+        Export signed offline rules bundle for air-gapped distribution.
+      inputSchema:
+        type: object
+        properties:
+          signer:
+            type: string
+        required: []
+      method: POST
+    - name: compliance-rules-import
+      path: /rules/import
+      description: |
+        Import and verify a signed rules bundle into local snapshot storage.
+      inputSchema:
+        type: object
+        properties:
+          bundle:
+            type: object
+        required:
+          - bundle
+      method: POST
