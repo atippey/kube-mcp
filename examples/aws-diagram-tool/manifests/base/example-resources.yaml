@@ -1,0 +1,29 @@
+apiVersion: kubemcp.io/v1alpha1
+kind: MCPServer
+metadata:
+  name: aws-diagram
+  namespace: mcp-system
+spec:
+  replicas: 1
+  image: mcp/aws-diagram:latest
+  # Run in SSE mode on port 8080, binding to all interfaces
+  args:
+    - "--transport"
+    - "sse"
+    - "--port"
+    - "8080"
+    - "--host"
+    - "0.0.0.0"
+  env:
+    - name: FASTMCP_LOG_LEVEL
+      value: "ERROR"
+  redis:
+    serviceName: mcp-redis
+  ingress:
+    host: aws-diagram.kubemcp.io
+    pathPrefix: /sse
+  # Selector is required but we don't expect it to find tools that the server will use,
+  # as the server ignores the mounted config.
+  toolSelector:
+    matchLabels:
+      mcp-server: aws-diagram

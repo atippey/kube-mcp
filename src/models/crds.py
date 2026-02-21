@@ -72,11 +72,22 @@ class ServerConfig(BaseModel):
     maxConcurrentRequests: int = Field(default=100, ge=1, le=10000)
 
 
+class EnvVar(BaseModel):
+    """Environment variable for MCPServer container."""
+
+    name: str = Field(..., min_length=1)
+    value: str | None = None
+    valueFrom: dict[str, Any] | None = None
+
+
 class MCPServerSpec(BaseModel):
     """MCPServer spec."""
 
     replicas: int = Field(default=1, ge=1, le=10)
     image: str = Field(default="ghcr.io/atippey/mcp-echo-server:latest")
+    command: list[str] | None = None
+    args: list[str] | None = None
+    env: list[EnvVar] | None = None
     redis: RedisConfig
     ingress: IngressConfig | None = None
     toolSelector: LabelSelector
