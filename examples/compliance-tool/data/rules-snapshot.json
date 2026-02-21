@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-02-20T00:00:00Z",
+  "ttl_hours": 6,
+  "iron_bank_images": [
+    "registry1.dso.mil/ironbank/opensource/python/python:3.12",
+    "registry1.dso.mil/ironbank/redhat/ubi/ubi9:9.4",
+    "registry1.dso.mil/ironbank/chainguard/wolfi-base:latest"
+  ],
+  "fips_enabled_images": [
+    "registry1.dso.mil/ironbank/opensource/python/python:3.12",
+    "registry1.dso.mil/ironbank/redhat/ubi/ubi9:9.4",
+    "ubi9/ubi:9.4-fips"
+  ],
+  "cmvp_validated_packages": [
+    "openssl",
+    "aws-lc-rs",
+    "boringcrypto",
+    "cryptography"
+  ],
+  "known_native_node_packages": [
+    "bcrypt",
+    "better-sqlite3",
+    "canvas",
+    "sharp",
+    "ffi-napi",
+    "node-gyp"
+  ],
+  "denied_packages": {
+    "python": [
+      "pycryptodome",
+      "pynacl",
+      "pyaes",
+      "tink"
+    ],
+    "rust": [
+      "ring",
+      "aes",
+      "sha2",
+      "rsa",
+      "ed25519-dalek"
+    ],
+    "node": [],
+    "go": []
+  }
+}
