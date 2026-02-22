@@ -38,32 +38,6 @@ spec:
                   type: string
                   default: "ghcr.io/atippey/mcp-echo-server:latest"
                   description: Image for the MCP server container
-                command:
-                  type: array
-                  items:
-                    type: string
-                  description: "Command to run in the container"
-                args:
-                  type: array
-                  items:
-                    type: string
-                  description: "Arguments to pass to the container"
-                env:
-                  type: array
-                  items:
-                    type: object
-                    required:
-                      - name
-                    properties:
-                      name:
-                        type: string
-                        minLength: 1
-                      value:
-                        type: string
-                      valueFrom:
-                        type: object
-                        x-kubernetes-preserve-unknown-fields: true
-                  description: "Environment variables for the container"
                 redis:
                   type: object
                   required:
