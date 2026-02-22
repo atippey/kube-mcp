@@ -38,6 +38,31 @@ spec:
                   type: string
                   default: "ghcr.io/atippey/mcp-echo-server:latest"
                   description: Image for the MCP server container
+                command:
+                  type: array
+                  items:
+                    type: string
+                  description: Override the container entrypoint
+                args:
+                  type: array
+                  items:
+                    type: string
+                  description: Arguments passed to the container entrypoint
+                env:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - name
+                    properties:
+                      name:
+                        type: string
+                        minLength: 1
+                        maxLength: 253
+                      value:
+                        type: string
+                        default: ""
+                  description: Additional environment variables for the container
                 redis:
                   type: object
                   required:
