@@ -54,6 +54,11 @@ spec:
                     type: object
                     required:
                       - name
+                    oneOf:
+                      - required:
+                          - value
+                      - required:
+                          - valueFrom
                     properties:
                       name:
                         type: string
@@ -61,7 +66,9 @@ spec:
                         maxLength: 253
                       value:
                         type: string
-                        default: ""
+                      valueFrom:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
                   description: Additional environment variables for the container
                 redis:
                   type: object

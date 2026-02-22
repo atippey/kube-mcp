@@ -710,13 +710,13 @@ async def _reconcile_mcpserver_inner(
     }
 
     # Build container env: start with operator defaults, then append user env vars
-    container_env: list[dict[str, str]] = [
+    container_env: list[dict[str, Any]] = [
         {"name": "REDIS_HOST", "value": server_spec.redis.serviceName},
         {"name": "MCP_CONFIG_DIR", "value": "/etc/mcp/config"},
     ]
     if server_spec.env:
         for env_var in server_spec.env:
-            container_env.append(env_var.model_dump())
+            container_env.append(env_var.model_dump(exclude_none=True))
 
     container: dict[str, Any] = {
         "name": "server",

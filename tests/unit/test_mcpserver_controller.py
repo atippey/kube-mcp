@@ -90,20 +90,44 @@ class TestMCPServerSpec:
         with pytest.raises(ValueError):
             EnvVar(name="", value="val")
 
-    def test_env_var_value_defaults_empty(self) -> None:
-        """Test that env var value defaults to empty string."""
-        var = EnvVar(name="FOO")
-        assert var.value == ""
+    def test_env_var_requires_value_or_value_from(self) -> None:
+        """Test that env vars require a value source."""
+        with pytest.raises(ValueError):
+            EnvVar(name="FOO")
+
+    def test_env_var_rejects_both_value_and_value_from(self) -> None:
+        """Test that env vars cannot set both value and valueFrom."""
+        with pytest.raises(ValueError):
+            EnvVar(
+                name="FOO",
+                value="bar",
+                valueFrom={"secretKeyRef": {"name": "my-secret", "key": "foo"}},
+            )
+
+    def test_env_var_accepts_value_from(self) -> None:
+        """Test that env vars support Kubernetes valueFrom sources."""
+        var = EnvVar(
+            name="TOKEN",
+            valueFrom={"secretKeyRef": {"name": "my-secret", "key": "token"}},
+        )
+        assert var.value is None
+        assert var.valueFrom == {"secretKeyRef": {"name": "my-secret", "key": "token"}}
 
     def test_env_serialization_via_model_dump(self) -> None:
         """Test that env vars serialize consistently via Pydantic model_dump."""
         spec = MCPServerSpec(
             redis={"serviceName": "redis"},
             toolSelector={"matchLabels": {"app": "test"}},
-            env=[{"name": "A", "value": "1"}, {"name": "B", "value": "2"}],
+            env=[
+                {"name": "A", "value": "1"},
+                {"name": "B", "valueFrom": {"configMapKeyRef": {"name": "cm", "key": "b"}}},
+            ],
         )
-        dumped = [e.model_dump() for e in spec.env]
-        assert dumped == [{"name": "A", "value": "1"}, {"name": "B", "value": "2"}]
+        dumped = [e.model_dump(exclude_none=True) for e in spec.env]
+        assert dumped == [
+            {"name": "A", "value": "1"},
+            {"name": "B", "valueFrom": {"configMapKeyRef": {"name": "cm", "key": "b"}}},
+        ]
 
 
 class TestMCPServerReconciliation:
@@ -662,6 +686,45 @@ class TestMCPServerReconciliation:
         assert env[1] == {"name": "MCP_CONFIG_DIR", "value": "/etc/mcp/config"}
         assert env[2] == {"name": "FASTMCP_LOG_LEVEL", "value": "ERROR"}
         assert env[3] == {"name": "CUSTOM_VAR", "value": "custom"}
+
+    @pytest.mark.asyncio
+    async def test_reconcile_creates_deployment_with_env_value_from(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        mock_adopt: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that valueFrom env vars are preserved in deployment spec."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        sample_mcpserver_spec["env"] = [
+            {
+                "name": "API_TOKEN",
+                "valueFrom": {"secretKeyRef": {"name": "aws-diagram-secret", "key": "api-token"}},
+            }
+        ]
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        deployment_body = mock_k8s.create_or_update_deployment.call_args[0][2]
+        env = deployment_body["spec"]["template"]["spec"]["containers"][0]["env"]
+        assert env[2] == {
+            "name": "API_TOKEN",
+            "valueFrom": {"secretKeyRef": {"name": "aws-diagram-secret", "key": "api-token"}},
+        }
 
     @pytest.mark.asyncio
     async def test_reconcile_creates_deployment_without_optional_fields(
