@@ -137,6 +137,40 @@ k3d-build:
 k3d-deploy:
 	./scripts/k3d-cluster.sh deploy
 
+k3d-smoke: ## Run smoke tests against k3d cluster
+	./scripts/smoke-test.sh
+
+# =============================================================================
+# Manifest Validation
+# =============================================================================
+
+setup-kubeconform: ## Install kubeconform
+	@if command -v kubeconform >/dev/null 2>&1; then \
+		echo "kubeconform already installed: $$(kubeconform -v)"; \
+	elif command -v brew >/dev/null 2>&1; then \
+		echo "Installing kubeconform via Homebrew..."; \
+		brew install kubeconform; \
+	else \
+		echo "Installing kubeconform via GitHub release..."; \
+		curl -sL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | \
+			tar xz -C /usr/local/bin kubeconform; \
+	fi
+
+generate-schemas: ## Generate JSON schemas from CRDs for kubeconform
+	@python scripts/generate-schemas.py
+
+validate-manifests: generate-schemas ## Validate all manifests against CRD schemas
+	@echo "Validating base manifests..."
+	@kubeconform -strict \
+		-ignore-missing-schemas \
+		-schema-location default \
+		-schema-location '.schemas/{{ .ResourceKind }}_{{ .ResourceAPIVersion }}.json' \
+		-ignore-filename-pattern '.*kustomization.yaml' \
+		-summary \
+		manifests/base/crds/*.yaml manifests/base/*.yaml
+	@echo ""
+	@./scripts/validate-examples.sh
+
 # =============================================================================
 # Kustomize Deployments
 # =============================================================================

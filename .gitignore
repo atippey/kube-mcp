@@ -67,6 +67,9 @@ kubeconfig
 *.kubeconfig
 .mcp.json
 
+# Generated schemas for kubeconform
+.schemas/
+
 # Go example compiled binaries
 examples/weather-tool/weather-tool
 examples/dns-tool/dns-tool
