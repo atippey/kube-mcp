@@ -26,9 +26,7 @@ def extract_schema(crd_path: Path) -> tuple[str, str, dict] | None:
     schema = version_entry["schema"]["openAPIV3Schema"]
 
     # kubeconform expects a JSON Schema with x-kubernetes metadata
-    schema["x-kubernetes-group-version-kind"] = [
-        {"group": group, "kind": kind, "version": version}
-    ]
+    schema["x-kubernetes-group-version-kind"] = [{"group": group, "kind": kind, "version": version}]
 
     api_version = f"{group}/{version}"
     return kind, api_version, schema
