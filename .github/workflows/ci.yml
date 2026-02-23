@@ -8,6 +8,26 @@ on:
     branches: [main]
 
 jobs:
+  validate-manifests:
+    name: Validate Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Install kubeconform
+        run: make setup-kubeconform
+
+      - name: Validate manifests
+        run: make validate-manifests
+
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
