@@ -317,7 +317,7 @@ class TestMCPServerReconciliation:
         mock_logger: MagicMock,
         sample_body: dict[str, Any],
     ) -> None:
-        """Test that reconciliation sets conditions."""
+        """Test that reconciliation sets all three condition types."""
         mock_k8s = MagicMock()
         mock_k8s.list_by_label_selector.side_effect = [[], [], []]
         mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 2}}
@@ -334,11 +334,10 @@ class TestMCPServerReconciliation:
                 body=sample_body,
             )
 
-        assert len(mock_patch_obj.status["conditions"]) > 0
-        ready_condition = next(
-            (c for c in mock_patch_obj.status["conditions"] if c["type"] == "Ready"), None
-        )
-        assert ready_condition is not None
+        conditions = mock_patch_obj.status["conditions"]
+        assert len(conditions) == 3
+        condition_types = {c["type"] for c in conditions}
+        assert condition_types == {"ToolsDiscovered", "ConfigReady", "Ready"}
 
     @pytest.mark.asyncio
     async def test_reconcile_ready_when_deployment_ready(
@@ -399,6 +398,121 @@ class TestMCPServerReconciliation:
         )
         assert ready_condition["status"] == "False"
         assert ready_condition["reason"] == "DeploymentNotReady"
+
+    @pytest.mark.asyncio
+    async def test_reconcile_tools_discovered_true_with_tools(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test ToolsDiscovered is True when tools are found."""
+        mock_k8s = MagicMock()
+        tool_cr = {
+            "spec": {
+                "name": "my-tool",
+                "service": {"name": "svc", "port": 8080, "path": "/"},
+                "inputSchema": {"type": "object"},
+            }
+        }
+        mock_k8s.list_by_label_selector.side_effect = [[tool_cr], [], []]
+        mock_k8s.get_service.return_value = {
+            "spec": {"selector": {"app": "backend"}, "ports": [{"port": 8080}]}
+        }
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        condition = next(
+            c for c in mock_patch_obj.status["conditions"] if c["type"] == "ToolsDiscovered"
+        )
+        assert condition["status"] == "True"
+        assert condition["reason"] == "ResourcesFound"
+        assert "1 tool(s)" in condition["message"]
+
+    @pytest.mark.asyncio
+    async def test_reconcile_tools_discovered_false_with_no_resources(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test ToolsDiscovered is False when no tools/prompts/resources found."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 0}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        condition = next(
+            c for c in mock_patch_obj.status["conditions"] if c["type"] == "ToolsDiscovered"
+        )
+        assert condition["status"] == "False"
+        assert condition["reason"] == "NoResourcesFound"
+        assert "No tools, prompts, or resources found" in condition["message"]
+
+    @pytest.mark.asyncio
+    async def test_reconcile_config_ready_condition(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test ConfigReady condition is set after ConfigMap creation."""
+        mock_k8s = MagicMock()
+        tool_cr = {
+            "spec": {
+                "name": "my-tool",
+                "service": {"name": "svc", "port": 8080, "path": "/"},
+                "inputSchema": {"type": "object"},
+            }
+        }
+        prompt_cr = {"spec": {"name": "my-prompt", "template": "Hello {{name}}", "variables": []}}
+        mock_k8s.list_by_label_selector.side_effect = [[tool_cr], [prompt_cr], []]
+        mock_k8s.get_service.return_value = {
+            "spec": {"selector": {"app": "backend"}, "ports": [{"port": 8080}]}
+        }
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        condition = next(
+            c for c in mock_patch_obj.status["conditions"] if c["type"] == "ConfigReady"
+        )
+        assert condition["status"] == "True"
+        assert condition["reason"] == "ConfigMapCreated"
+        assert "1 tool(s)" in condition["message"]
+        assert "1 prompt(s)" in condition["message"]
 
     @pytest.mark.asyncio
     async def test_reconcile_logs_info(

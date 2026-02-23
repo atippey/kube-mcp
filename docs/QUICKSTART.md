@@ -85,6 +85,33 @@ kubectl get pods -n mcp-test
 
 The operator creates a Deployment, Service, and ConfigMap for the `echo` MCPServer. The ConfigMap contains the aggregated tool/prompt/resource configuration, mounted into the MCP server pod.
 
+Check the MCPServer status conditions to see what the operator discovered:
+
+```bash
+kubectl describe mcpserver echo -n mcp-test
+```
+
+Look for the `Conditions` section in the output:
+
+```
+Status:
+  Conditions:
+    Type:    ToolsDiscovered
+    Status:  True
+    Reason:  ResourcesFound
+    Message: Found 2 tool(s), 2 prompt(s), 2 resource(s) matching selector ...
+    Type:    ConfigReady
+    Status:  True
+    Reason:  ConfigMapCreated
+    Message: ConfigMap created with 2 tool(s), 2 prompt(s), 2 resource(s)
+    Type:    Ready
+    Status:  True
+    Reason:  DeploymentReady
+    Message: Deployment has 1 ready replica(s)
+```
+
+If `ToolsDiscovered` is `False`, check that your MCPTool labels match the MCPServer's `toolSelector`.
+
 ## 6. Deploy a third-party MCP server (Direct Pattern)
 
 Not all MCP servers need tool backends. Some (like `mcp/aws-diagram`) are self-contained — the operator just needs to run them with the right args and env:
