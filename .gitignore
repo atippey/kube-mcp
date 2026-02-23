@@ -75,3 +75,6 @@ examples/time-tool/time-tool
 examples/crane-tool/crane-tool
 examples/kube-info-tool/kube-info-tool
 examples/kubectl-explain/kubectl-explain
+
+# Don't ask
+*oral_history.md
