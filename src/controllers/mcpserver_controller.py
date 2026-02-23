@@ -709,6 +709,33 @@ async def _reconcile_mcpserver_inner(
         "kubemcp.io/server": name,
     }
 
+    # Build container env: start with operator defaults, then append user env vars
+    container_env: list[dict[str, Any]] = [
+        {"name": "REDIS_HOST", "value": server_spec.redis.serviceName},
+        {"name": "MCP_CONFIG_DIR", "value": "/etc/mcp/config"},
+    ]
+    if server_spec.env:
+        for env_var in server_spec.env:
+            container_env.append(env_var.model_dump(exclude_none=True))
+
+    container: dict[str, Any] = {
+        "name": "server",
+        "image": server_spec.image,
+        "ports": [{"containerPort": 8080}],
+        "env": container_env,
+        "volumeMounts": [
+            {
+                "name": "config",
+                "mountPath": "/etc/mcp/config",
+                "readOnly": True,
+            }
+        ],
+    }
+    if server_spec.command is not None:
+        container["command"] = server_spec.command
+    if server_spec.args is not None:
+        container["args"] = server_spec.args
+
     deployment_body = {
         "apiVersion": "apps/v1",
         "kind": "Deployment",
@@ -730,30 +757,7 @@ async def _reconcile_mcpserver_inner(
                     "labels": deployment_labels,
                 },
                 "spec": {
-                    "containers": [
-                        {
-                            "name": "server",
-                            "image": server_spec.image,
-                            "ports": [{"containerPort": 8080}],
-                            "env": [
-                                {
-                                    "name": "REDIS_HOST",
-                                    "value": server_spec.redis.serviceName,
-                                },
-                                {
-                                    "name": "MCP_CONFIG_DIR",
-                                    "value": "/etc/mcp/config",
-                                },
-                            ],
-                            "volumeMounts": [
-                                {
-                                    "name": "config",
-                                    "mountPath": "/etc/mcp/config",
-                                    "readOnly": True,
-                                }
-                            ],
-                        }
-                    ],
+                    "containers": [container],
                     "volumes": [
                         {
                             "name": "config",

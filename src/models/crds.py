@@ -72,11 +72,36 @@ class ServerConfig(BaseModel):
     maxConcurrentRequests: int = Field(default=100, ge=1, le=10000)
 
 
+class EnvVar(BaseModel):
+    """A container environment variable."""
+
+    name: str = Field(..., min_length=1, max_length=253)
+    value: str | None = None
+    valueFrom: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def validate_value_source(self) -> "EnvVar":
+        """Require exactly one of ``value`` or ``valueFrom``."""
+        has_value = self.value is not None
+        has_value_from = self.valueFrom is not None
+
+        if has_value and has_value_from:
+            msg = "EnvVar cannot set both value and valueFrom"
+            raise ValueError(msg)
+        if not has_value and not has_value_from:
+            msg = "EnvVar must set either value or valueFrom"
+            raise ValueError(msg)
+        return self
+
+
 class MCPServerSpec(BaseModel):
     """MCPServer spec."""
 
     replicas: int = Field(default=1, ge=1, le=10)
     image: str = Field(default="ghcr.io/atippey/mcp-echo-server:latest")
+    command: list[str] | None = Field(default=None)
+    args: list[str] | None = Field(default=None)
+    env: list[EnvVar] | None = Field(default=None)
     redis: RedisConfig
     ingress: IngressConfig | None = None
     toolSelector: LabelSelector

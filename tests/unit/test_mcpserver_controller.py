@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.controllers.mcpserver_controller import reconcile_mcpserver
-from src.models.crds import MCPServerSpec
+from src.models.crds import EnvVar, MCPServerSpec
 
 
 class TestMCPServerSpec:
@@ -59,6 +59,75 @@ class TestMCPServerSpec:
             toolSelector={"matchLabels": {"app": "test"}},
         )
         assert spec.config is None  # Config is optional, gets defaults when processed
+
+    def test_command_args_env_optional(self) -> None:
+        """Test that command, args, and env default to None."""
+        spec = MCPServerSpec(
+            redis={"serviceName": "redis"},
+            toolSelector={"matchLabels": {"app": "test"}},
+        )
+        assert spec.command is None
+        assert spec.args is None
+        assert spec.env is None
+
+    def test_command_args_env_accepted(self) -> None:
+        """Test that command, args, and env are parsed correctly."""
+        spec = MCPServerSpec(
+            redis={"serviceName": "redis"},
+            toolSelector={"matchLabels": {"app": "test"}},
+            command=["/bin/sh", "-c"],
+            args=["--transport", "sse", "--port", "8080"],
+            env=[{"name": "LOG_LEVEL", "value": "DEBUG"}],
+        )
+        assert spec.command == ["/bin/sh", "-c"]
+        assert spec.args == ["--transport", "sse", "--port", "8080"]
+        assert len(spec.env) == 1
+        assert spec.env[0].name == "LOG_LEVEL"
+        assert spec.env[0].value == "DEBUG"
+
+    def test_env_var_name_required(self) -> None:
+        """Test that env var name is required."""
+        with pytest.raises(ValueError):
+            EnvVar(name="", value="val")
+
+    def test_env_var_requires_value_or_value_from(self) -> None:
+        """Test that env vars require a value source."""
+        with pytest.raises(ValueError):
+            EnvVar(name="FOO")
+
+    def test_env_var_rejects_both_value_and_value_from(self) -> None:
+        """Test that env vars cannot set both value and valueFrom."""
+        with pytest.raises(ValueError):
+            EnvVar(
+                name="FOO",
+                value="bar",
+                valueFrom={"secretKeyRef": {"name": "my-secret", "key": "foo"}},
+            )
+
+    def test_env_var_accepts_value_from(self) -> None:
+        """Test that env vars support Kubernetes valueFrom sources."""
+        var = EnvVar(
+            name="TOKEN",
+            valueFrom={"secretKeyRef": {"name": "my-secret", "key": "token"}},
+        )
+        assert var.value is None
+        assert var.valueFrom == {"secretKeyRef": {"name": "my-secret", "key": "token"}}
+
+    def test_env_serialization_via_model_dump(self) -> None:
+        """Test that env vars serialize consistently via Pydantic model_dump."""
+        spec = MCPServerSpec(
+            redis={"serviceName": "redis"},
+            toolSelector={"matchLabels": {"app": "test"}},
+            env=[
+                {"name": "A", "value": "1"},
+                {"name": "B", "valueFrom": {"configMapKeyRef": {"name": "cm", "key": "b"}}},
+            ],
+        )
+        dumped = [e.model_dump(exclude_none=True) for e in spec.env]
+        assert dumped == [
+            {"name": "A", "value": "1"},
+            {"name": "B", "valueFrom": {"configMapKeyRef": {"name": "cm", "key": "b"}}},
+        ]
 
 
 class TestMCPServerReconciliation:
@@ -513,6 +582,181 @@ class TestMCPServerReconciliation:
             deployment_body["spec"]["template"]["spec"]["containers"][0]["image"]
             == "custom/image:tag"
         )
+
+    @pytest.mark.asyncio
+    async def test_reconcile_creates_deployment_with_args(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        mock_adopt: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that args are passed through to the deployment container."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        sample_mcpserver_spec["args"] = ["--transport", "sse", "--port", "8080"]
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        deployment_body = mock_k8s.create_or_update_deployment.call_args[0][2]
+        container = deployment_body["spec"]["template"]["spec"]["containers"][0]
+        assert container["args"] == ["--transport", "sse", "--port", "8080"]
+        assert "command" not in container
+
+    @pytest.mark.asyncio
+    async def test_reconcile_creates_deployment_with_command(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        mock_adopt: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that command is passed through to the deployment container."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        sample_mcpserver_spec["command"] = ["/bin/sh", "-c"]
+        sample_mcpserver_spec["args"] = ["echo hello"]
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        deployment_body = mock_k8s.create_or_update_deployment.call_args[0][2]
+        container = deployment_body["spec"]["template"]["spec"]["containers"][0]
+        assert container["command"] == ["/bin/sh", "-c"]
+        assert container["args"] == ["echo hello"]
+
+    @pytest.mark.asyncio
+    async def test_reconcile_creates_deployment_with_env(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        mock_adopt: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that user env vars are appended after operator defaults."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        sample_mcpserver_spec["env"] = [
+            {"name": "FASTMCP_LOG_LEVEL", "value": "ERROR"},
+            {"name": "CUSTOM_VAR", "value": "custom"},
+        ]
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        deployment_body = mock_k8s.create_or_update_deployment.call_args[0][2]
+        container = deployment_body["spec"]["template"]["spec"]["containers"][0]
+        env = container["env"]
+        # Operator defaults first, then user env
+        assert env[0] == {"name": "REDIS_HOST", "value": "mcp-redis"}
+        assert env[1] == {"name": "MCP_CONFIG_DIR", "value": "/etc/mcp/config"}
+        assert env[2] == {"name": "FASTMCP_LOG_LEVEL", "value": "ERROR"}
+        assert env[3] == {"name": "CUSTOM_VAR", "value": "custom"}
+
+    @pytest.mark.asyncio
+    async def test_reconcile_creates_deployment_with_env_value_from(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        mock_adopt: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that valueFrom env vars are preserved in deployment spec."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        sample_mcpserver_spec["env"] = [
+            {
+                "name": "API_TOKEN",
+                "valueFrom": {"secretKeyRef": {"name": "aws-diagram-secret", "key": "api-token"}},
+            }
+        ]
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        deployment_body = mock_k8s.create_or_update_deployment.call_args[0][2]
+        env = deployment_body["spec"]["template"]["spec"]["containers"][0]["env"]
+        assert env[2] == {
+            "name": "API_TOKEN",
+            "valueFrom": {"secretKeyRef": {"name": "aws-diagram-secret", "key": "api-token"}},
+        }
+
+    @pytest.mark.asyncio
+    async def test_reconcile_creates_deployment_without_optional_fields(
+        self,
+        sample_mcpserver_spec: dict[str, Any],
+        mock_logger: MagicMock,
+        mock_adopt: MagicMock,
+        sample_body: dict[str, Any],
+    ) -> None:
+        """Test that command/args are omitted from deployment when not specified."""
+        mock_k8s = MagicMock()
+        mock_k8s.list_by_label_selector.side_effect = [[], [], []]
+        mock_k8s.get_deployment.return_value = {"status": {"readyReplicas": 1}}
+        mock_patch_obj = MagicMock()
+        mock_patch_obj.status = {}
+
+        with patch("src.controllers.mcpserver_controller.get_k8s_client", return_value=mock_k8s):
+            await reconcile_mcpserver(
+                spec=sample_mcpserver_spec,
+                name="test-server",
+                namespace="default",
+                logger=mock_logger,
+                patch=mock_patch_obj,
+                body=sample_body,
+            )
+
+        deployment_body = mock_k8s.create_or_update_deployment.call_args[0][2]
+        container = deployment_body["spec"]["template"]["spec"]["containers"][0]
+        assert "command" not in container
+        assert "args" not in container
+        # Only operator default env vars
+        assert len(container["env"]) == 2
 
     @pytest.mark.asyncio
     async def test_reconcile_creates_service(
