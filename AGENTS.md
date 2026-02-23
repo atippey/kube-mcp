@@ -55,7 +55,6 @@ mcp-operator/
 │       └── production/   # Real cluster (ghul)
 ├── scripts/
 │   └── k3d-cluster.sh    # k3d cluster management
-├── crd/                  # Original CRD source files
 ├── Makefile              # Top-level orchestration
 └── pyproject.toml        # Poetry + poethepoet config
 ```

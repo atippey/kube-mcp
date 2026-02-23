@@ -577,6 +577,34 @@ async def _reconcile_mcpserver_inner(
     resource_count = len(resources)
     logger.info(f"Found {resource_count} MCPResources matching selector")
 
+    # Build status conditions list
+    conditions: list[dict[str, Any]] = []
+
+    # ToolsDiscovered condition
+    selector_str = str(selector_dict.get("matchLabels", selector_dict))
+    total_crs = len(tools) + prompt_count + resource_count
+    if total_crs > 0:
+        conditions.append(
+            _create_condition(
+                condition_type="ToolsDiscovered",
+                status="True",
+                reason="ResourcesFound",
+                message=(
+                    f"Found {len(tools)} tool(s), {prompt_count} prompt(s), "
+                    f"{resource_count} resource(s) matching selector {selector_str}"
+                ),
+            )
+        )
+    else:
+        conditions.append(
+            _create_condition(
+                condition_type="ToolsDiscovered",
+                status="False",
+                reason="NoResourcesFound",
+                message=f"No tools, prompts, or resources found matching selector {selector_str}",
+            )
+        )
+
     # Generate ConfigMap -- expand both single-tool and multi-tool MCPTool CRs
     tools_data: list[dict[str, Any]] = []
     for tool_cr in tools:
@@ -658,6 +686,22 @@ async def _reconcile_mcpserver_inner(
         owner_reference=owner_ref,
     )
     logger.info(f"Updated ConfigMap {config_map_name}")
+
+    # ConfigReady condition
+    config_msg = (
+        f"ConfigMap created with {tool_count} tool(s), "
+        f"{prompt_count} prompt(s), {resource_count} resource(s)"
+    )
+    if tool_count == 42:
+        config_msg += " — the answer to life, the universe, and everything"
+    conditions.append(
+        _create_condition(
+            condition_type="ConfigReady",
+            status="True",
+            reason="ConfigMapCreated",
+            message=config_msg,
+        )
+    )
 
     # Generate egress NetworkPolicy from discovered tool/resource services
     service_targets = _collect_service_targets(tools, resources, namespace, k8s)
@@ -814,27 +858,31 @@ async def _reconcile_mcpserver_inner(
         f"tools={tool_count}, prompts={prompt_count}, resources={resource_count}"
     )
 
-    # Create condition based on deployment status
+    # Ready condition based on deployment status
     if is_ready:
-        condition = _create_condition(
-            condition_type="Ready",
-            status="True",
-            reason="DeploymentReady",
-            message=f"Deployment has {ready_replicas} ready replica(s)",
+        conditions.append(
+            _create_condition(
+                condition_type="Ready",
+                status="True",
+                reason="DeploymentReady",
+                message=f"Deployment has {ready_replicas} ready replica(s)",
+            )
         )
     else:
-        condition = _create_condition(
-            condition_type="Ready",
-            status="False",
-            reason="DeploymentNotReady",
-            message="Deployment has no ready replicas",
+        conditions.append(
+            _create_condition(
+                condition_type="Ready",
+                status="False",
+                reason="DeploymentNotReady",
+                message="Deployment has no ready replicas",
+            )
         )
 
     patch.status["readyReplicas"] = ready_replicas
     patch.status["toolCount"] = tool_count
     patch.status["promptCount"] = prompt_count
     patch.status["resourceCount"] = resource_count
-    patch.status["conditions"] = [condition]
+    patch.status["conditions"] = conditions
 
     MANAGED_RESOURCES.labels(kind="MCPServer").inc(0)  # ensure metric exists
 

@@ -51,7 +51,7 @@ function status() {
 
 function install_crds() {
     echo "Installing MCP CRDs..."
-    kubectl apply -f manifests/crds/
+    kubectl apply -f manifests/base/crds/
     echo "CRDs installed successfully!"
 }
 
@@ -118,7 +118,7 @@ function run_local() {
 
 function deploy_examples() {
     echo "Deploying example resources..."
-    kubectl apply -f crd/examples.yaml
+    kubectl apply -k examples/echo-server/manifests/
     echo "Examples deployed!"
 }
 

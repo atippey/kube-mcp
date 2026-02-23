@@ -16,12 +16,7 @@ Replace all occurrences of `mcp.example.com` with `kubemcp.io` across the codeba
 - `manifests/base/crds/mcptool-crd.yaml`
 - `manifests/base/crds/mcpprompt-crd.yaml`
 - `manifests/base/crds/mcpresource-crd.yaml`
-- `crd/mcpserver-crd.yaml`
-- `crd/mcptool-crd.yaml`
-- `crd/mcpprompt-crd.yaml`
-- `crd/mcpresource-crd.yaml`
 - `manifests/examples/test-resources.yaml`
-- `crd/examples.yaml`
 - `examples.yaml`
 - Any test files that reference the CRD group
 
@@ -86,11 +81,6 @@ The CRDs currently don't have the `status` subresource enabled, which prevents k
 - `manifests/base/crds/mcptool-crd.yaml`
 - `manifests/base/crds/mcpprompt-crd.yaml`
 - `manifests/base/crds/mcpresource-crd.yaml`
-- `crd/mcpserver-crd.yaml`
-- `crd/mcptool-crd.yaml`
-- `crd/mcpprompt-crd.yaml`
-- `crd/mcpresource-crd.yaml`
-
 **Change required:**
 Add this to each CRD under `spec.versions[].subresources`:
 
