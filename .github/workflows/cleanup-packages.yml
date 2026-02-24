@@ -10,6 +10,9 @@ on:
         required: false
         default: '7'
 
+permissions:
+  contents: read
+
 jobs:
   cleanup:
     name: Prune branch-prefixed package versions
