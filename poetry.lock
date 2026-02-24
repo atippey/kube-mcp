@@ -189,7 +189,7 @@ description = "Timeout context manager for asyncio programs"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "python_version == \"3.11\" and python_full_version < \"3.11.3\""
+markers = "python_full_version < \"3.11.3\""
 files = [
     {file = "async_timeout-5.0.1-py3-none-any.whl", hash = "sha256:39e3809566ff85354557ec2398b55e096c8364bacac9405a7a1fa429e77fe76c"},
     {file = "async_timeout-5.0.1.tar.gz", hash = "sha256:d9321a7a3d5a6a5e187e824d2fa0793ce379a202935782d555d6e9d2735677d3"},
@@ -884,21 +884,18 @@ i18n = ["Babel (>=2.7)"]
 
 [[package]]
 name = "kopf"
-version = "1.40.0"
+version = "1.43.0"
 description = "Kubernetes Operator Pythonic Framework (Kopf)"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "kopf-1.40.0-py3-none-any.whl", hash = "sha256:35d309da7ef84d6ea83d1638cbdf8dc392f7a9b513369aad3cc5367320219075"},
-    {file = "kopf-1.40.0.tar.gz", hash = "sha256:755f33ccb2619e0dede15a64e5f1f5da44e585f9f2afea7e127e9005cbc44d50"},
+    {file = "kopf-1.43.0-py3-none-any.whl", hash = "sha256:c601d29c317d381bbed6a0df9459d731a4ebb403e58f6998e753b76d4908bc6b"},
+    {file = "kopf-1.43.0.tar.gz", hash = "sha256:063058a4dc9960072b9b2512b3645e27955e3ae44c753ae69beeeea8ec9662e7"},
 ]
 
 [package.dependencies]
-aiohttp = [
-    {version = ">=3.9.0", markers = "python_version >= \"3.12\""},
-    {version = "*", markers = "python_version < \"3.12\""},
-]
+aiohttp = ">=3.11.0"
 click = ">=8.2.0"
 iso8601 = "*"
 python-json-logger = "*"
@@ -2560,4 +2557,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "5b95b81ca7c18a4aaa0f14b8987919d318730400d5c8b51a23e514baa492c4e2"
+content-hash = "0d9634687e7b3b8d5faabdff7da7f1fce54a202d6c49a43ba7f30608fcd870ae"
