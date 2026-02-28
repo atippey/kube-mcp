@@ -331,7 +331,6 @@ jobs:
           version: '3.17.0'
 
       - name: Log in to GHCR
-<<<<<<< HEAD
         if: github.event_name == 'push'
         run: echo "${{ secrets.DOCKER_PAT }}" | helm registry login ghcr.io --username ${{ github.actor }} --password-stdin
 
@@ -347,20 +346,6 @@ jobs:
           helm package charts/mcp-operator \
             --version "$VERSION" \
             --app-version "$GITHUB_REF_NAME"
-=======
-        run: echo "${{ secrets.DOCKER_PAT }}" | helm registry login ghcr.io --username ${{ github.actor }} --password-stdin
-
-      - name: Package chart
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          helm package charts/mcp-operator \
-            --version "$VERSION" \
-            --app-version "$GITHUB_REF_NAME"
-
-      - name: Push chart
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
->>>>>>> origin/main
           helm push "mcp-operator-${VERSION}.tgz" oci://ghcr.io/${{ github.repository_owner }}/charts
 
   security-scan:
