@@ -171,6 +171,12 @@ validate-manifests: generate-schemas ## Validate all manifests against CRD schem
 	@echo ""
 	@./scripts/validate-examples.sh
 
+helm-lint: ## Lint the Helm chart
+	helm lint charts/mcp-operator
+
+helm-template: ## Render Helm chart templates (dry-run)
+	helm template mcp-operator charts/mcp-operator
+
 # =============================================================================
 # Kustomize Deployments
 # =============================================================================
