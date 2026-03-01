@@ -251,7 +251,7 @@ jobs:
           output-file: mcp-operator-sbom.spdx.json
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: mcp-operator-sbom
           path: mcp-operator-sbom.spdx.json
@@ -309,7 +309,7 @@ jobs:
           output-file: mcp-echo-server-sbom.spdx.json
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: mcp-echo-server-sbom
           path: mcp-echo-server-sbom.spdx.json
@@ -369,7 +369,7 @@ jobs:
           exit-code: '0'  # Report only until kubernetes client upgrades urllib3 >=2.0
 
       - name: Upload Trivy scan results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: trivy-results
