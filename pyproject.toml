@@ -8,7 +8,7 @@ packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<4.0"
-kopf = "^1.44.4"
+kopf = "^1.44.5"
 kubernetes = "^35.0.0"
 redis = "^7.4.0"
 pydantic = "^2.0.0"
